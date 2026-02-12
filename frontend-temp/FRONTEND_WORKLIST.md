@@ -98,6 +98,13 @@ Backend（后端 API）
 - **Axios**: HTTP 请求
 - **Vue Router**: 路由和导航
 
+### 前端设计风格
+
+- 美术风格请采用深色主题，棱角锐利的科幻风格，配色以白色和紫色为主，整体风格现代、简洁，具有未来感。
+- 尽量采用 Naive-UI的组件，避免自己重复造轮子
+- 同上，尽可能采用Uno-CSS的原子类，避免写又臭又长的css代码
+
+
 ---
 
 ## 📋 开发阶段和工作清单
@@ -105,67 +112,67 @@ Backend（后端 API）
 ### 阶段一：项目初始化（基础建设）
 
 #### 1.1 创建项目脚手架
-- [ ] 使用 `npm create vue@latest` 创建项目
-- [ ] 选择 TypeScript + Router + Pinia + ESLint
-- [ ] 配置项目基础结构
+- [x] 使用 `npm create vue@latest` 创建项目
+- [x] 选择 TypeScript + Router + Pinia + ESLint
+- [x] 配置项目基础结构
 
 #### 1.2 安装和配置依赖
-- [ ] 安装 Naive UI
-- [ ] 安装 Axios
-- [ ] 安装 Uno-CSS 及相关预设
-- [ ] 安装 dayjs（日期处理）
-- [ ] 配置 Uno-CSS（presets, shortcuts）
+- [x] 安装 Naive UI
+- [x] 安装 Axios
+- [x] 安装 Uno-CSS 及相关预设
+- [x] 安装 dayjs（日期处理）
+- [x] 配置 Uno-CSS（presets, shortcuts）
 
 #### 1.3 配置开发环境
-- [ ] 创建 `.env` 和 `.env.example`
-- [ ] 配置 TypeScript 路径别名（@/ 别名）
-- [ ] 配置 Vite 路径别名
-- [ ] 配置 ESLint 和 Prettier
-- [ ] 创建目录结构
+- [x] 创建 `.env` 和 `.env.example`
+- [x] 配置 TypeScript 路径别名（@/ 别名）
+- [x] 配置 Vite 路径别名
+- [x] 配置 ESLint 和 Prettier
+- [x] 创建目录结构
 
-**🎯 阶段目标**: 项目可正常启动，开发环境配置完成
+**🎯 阶段目标**: 项目可正常启动，开发环境配置完成 ✅
 
 ---
 
 ### 阶段二：基础设施（类型和服务）
 
 #### 2.1 TypeScript 类型定义
-- [ ] 定义核心数据模型（User, StoryNode, StoryBook 等）
-- [ ] 定义 API 响应类型（ApiResponse, PaginatedResponse）
-- [ ] 创建类型统一导出文件
+- [x] 定义核心数据模型（User, StoryNode, StoryBook 等）
+- [x] 定义 API 响应类型（ApiResponse, PaginatedResponse）
+- [x] 创建类型统一导出文件
 
 #### 2.2 API 服务层搭建
-- [ ] 配置 Axios 实例（baseURL, timeout）
-- [ ] 实现请求拦截器（添加 token）
-- [ ] 实现响应拦截器（401 处理、错误统一）
-- [ ] 创建各服务模块（对应后端 API 模块）
-  - [ ] auth.service.ts
-  - [ ] user.service.ts
-  - [ ] story.service.ts
-  - [ ] book.service.ts
-  - [ ] interaction.service.ts
-  - [ ] discovery.service.ts
-  - [ ] admin.service.ts
-  - [ ] upload.service.ts
+- [x] 配置 Axios 实例（baseURL, timeout）
+- [x] 实现请求拦截器（添加 token）
+- [x] 实现响应拦截器（401 处理、错误统一）
+- [x] 创建各服务模块（对应后端 API 模块）
+  - [x] auth.service.ts
+  - [x] user.service.ts
+  - [x] story.service.ts
+  - [x] book.service.ts
+  - [x] interaction.service.ts
+  - [x] discovery.service.ts
+  - [x] admin.service.ts
+  - [x] upload.service.ts
 
-**🎯 阶段目标**: 所有 API 调用有类型提示，服务层与后端对接完成
+**🎯 阶段目标**: 所有 API 调用有类型提示，服务层与后端对接完成 ✅
 
 #### 2.3 状态管理（Pinia Stores）
-- [ ] 创建 auth store（登录、登出、用户信息）
-- [ ] 创建 user store（用户资料、统计）
-- [ ] 创建 story store（当前阅读的故事）
-- [ ] 创建 notification store（通知列表、未读数）
-- [ ] 创建 app store（全局状态：主题、侧边栏等）
+- [x] 创建 auth store（登录、登出、用户信息）
+- [x] 创建 user store（用户资料、统计）
+- [x] 创建 story store（当前阅读的故事）
+- [x] 创建 notification store（通知列表、未读数）
+- [x] 创建 app store（全局状态：主题、侧边栏等）
 
-**🎯 阶段目标**: 状态管理结构清晰，数据流向明确
+**🎯 阶段目标**: 状态管理结构清晰，数据流向明确 ✅
 
 #### 2.4 路由配置
-- [ ] 配置路由表（基础路由）
-- [ ] 实现路由守卫（权限检查、登录拦截）
-- [ ] 配置路由元信息（requiresAuth, requiresAdmin 等）
-- [ ] 实现路由懒加载
+- [x] 配置路由表（基础路由）
+- [x] 实现路由守卫（权限检查、登录拦截）
+- [x] 配置路由元信息（requiresAuth, requiresAdmin 等）
+- [x] 实现路由懒加载
 
-**🎯 阶段目标**: 路由跳转正常，权限控制生效
+**🎯 阶段目标**: 路由跳转正常，权限控制生效 ✅
 
 ---
 
