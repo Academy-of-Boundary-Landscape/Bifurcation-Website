@@ -17,6 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from sqlalchemy import event, DDL
 
 from app.models.base import Base
 
@@ -135,11 +136,37 @@ class Notification(Base):
     comment = relationship("StoryComment", foreign_keys=[comment_id])
 
     __table_args__ = (
-        # 通知必须能定位到一个目标（至少 node_id 或 comment_id 其一）
-        CheckConstraint(
-            "(node_id IS NOT NULL) OR (comment_id IS NOT NULL)",
-            name="ck_notifications_target_present",
-        ),
-        # 常见查询：我的未读通知列表
+        # 移除 CheckConstraint，改用触发器
         Index("ix_notifications_user_isread_created", "user_id", "is_read", "created_at"),
     )
+
+# 定义触发器 SQL
+trigger_insert_sql = """
+DROP TRIGGER IF EXISTS trigger_check_notifications_target_present_insert;
+CREATE TRIGGER trigger_check_notifications_target_present_insert
+BEFORE INSERT ON notifications
+FOR EACH ROW
+BEGIN
+    IF (NEW.node_id IS NULL AND NEW.comment_id IS NULL) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'At least one of node_id or comment_id must be non-NULL';
+    END IF;
+END;
+"""
+
+trigger_update_sql = """
+DROP TRIGGER IF EXISTS trigger_check_notifications_target_present_update;
+CREATE TRIGGER trigger_check_notifications_target_present_update
+BEFORE UPDATE ON notifications
+FOR EACH ROW
+BEGIN
+    IF (NEW.node_id IS NULL AND NEW.comment_id IS NULL) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'At least one of node_id or comment_id must be non-NULL';
+    END IF;
+END;
+"""
+
+# 监听表创建事件，自动添加触发器
+event.listen(Notification.__table__, 'after_create', DDL(trigger_insert_sql))
+event.listen(Notification.__table__, 'after_create', DDL(trigger_update_sql))

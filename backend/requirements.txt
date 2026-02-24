@@ -8,3 +8,5 @@ python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
 alembic
+argon2-cffi
+pydantic[email]
