@@ -4,6 +4,9 @@ import type {
   StoryNodeTreeItem,
   AdminUpdateUserRequest,
   GetPendingNodesParams,
+  GetAdminUsersParams,
+  AdminDashboardStats,
+  User,
   MessageResponse,
 } from '@/types'
 
@@ -22,4 +25,14 @@ export const auditNode = (nodeId: number, data: AuditNodeRequest) => {
 // 管理员更新用户（封禁、改角色）
 export const adminUpdateUser = (userId: number, data: AdminUpdateUserRequest) => {
   return api.patch(`/admin/users/${userId}`, data)
+}
+
+// 管理员用户列表
+export const getAdminUsers = (params?: GetAdminUsersParams) => {
+  return api.get<User[]>('/admin/users', { params })
+}
+
+// 管理员仪表盘统计
+export const getAdminStats = () => {
+  return api.get<AdminDashboardStats>('/admin/stats')
 }

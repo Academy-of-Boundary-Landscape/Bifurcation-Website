@@ -16,16 +16,36 @@ export default defineConfig({
     'flex-col-center': 'flex flex-col items-center justify-center',
     'absolute-center': 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
     'text-ellipsis': 'truncate overflow-hidden whitespace-nowrap',
+    'sci-panel': 'tech-panel bg-bg-surface border border-line-primary rounded-none relative overflow-hidden',
+    'sci-divider': 'border-0 border-t border-line-muted',
+    'sci-accent-text': 'text-accent-violet',
   },
   theme: {
     colors: {
-      primary: '#18a058',
-      primaryHover: '#36ad6a',
-      secondary: '#2080f0',
-      success: '#18a058',
-      warning: '#f0a020',
-      error: '#d03050',
-      info: '#2080f0',
+      bg: {
+        base: '#000000',
+        surface: '#050507',
+      },
+      text: {
+        primary: '#ffffff',
+        muted: '#a1a1aa',
+      },
+      line: {
+        primary: 'rgba(255,255,255,0.72)',
+        muted: 'rgba(255,255,255,0.28)',
+      },
+      accent: {
+        violet: '#7c3aed',
+        blue: '#3b82f6',
+        green: '#22c55e',
+      },
+      primary: '#7c3aed',
+      primaryHover: '#8b5cf6',
+      secondary: '#3b82f6',
+      success: '#22c55e',
+      warning: '#f59e0b',
+      error: '#ef4444',
+      info: '#3b82f6',
     },
   },
 })

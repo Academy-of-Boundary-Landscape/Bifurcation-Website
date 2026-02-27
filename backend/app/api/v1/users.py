@@ -58,6 +58,6 @@ async def read_user_profile(
     
     # 注入额外的统计字段
     profile.nodes_count = nodes_count
-    profile.total_likes_received = total_likes
+    profile.likes_count = total_likes
     
     return profile

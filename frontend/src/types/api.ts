@@ -81,6 +81,12 @@ export interface ResetPasswordRequest {
   new_password: string
 }
 
+// 登录态修改密码
+export interface ChangePasswordRequest {
+  old_password: string
+  new_password: string
+}
+
 // ==================== 故事相关 ====================
 
 // 创建活动请求
@@ -95,7 +101,11 @@ export interface UpdateBookRequest {
   title?: string | null
   description?: string | null
   cover_image?: string | null
-  is_active?: boolean | null
+  phase?: 'drafting' | 'writing' | 'showcase' | 'archived' | null
+  start_at?: string | null
+  writing_end_at?: string | null
+  showcase_end_at?: string | null
+  allow_new_nodes?: boolean | null
 }
 
 // 创建节点请求
@@ -151,7 +161,8 @@ export interface SearchParams {
 
 // 审核节点请求
 export interface AuditNodeRequest {
-  status: 'published' | 'rejected'
+  status: 'pending' | 'published' | 'archived'
+  reject_reason?: string
 }
 
 // 管理员更新用户请求
@@ -169,9 +180,35 @@ export interface GetPendingNodesParams {
   limit?: number
 }
 
+// 管理员用户列表参数
+export interface GetAdminUsersParams {
+  skip?: number
+  limit?: number
+  role?: 'admin' | 'writer' | 'banned'
+  is_active?: boolean
+  keyword?: string
+}
+
+// 管理员仪表盘统计
+export interface AdminDashboardStats {
+  users: {
+    total: number
+    active: number
+    inactive: number
+    new_7d: number
+  }
+  nodes: {
+    total: number
+    pending: number
+    published: number
+    archived: number
+    new_7d: number
+  }
+}
+
 // 获取用户创作列表参数
 export interface GetUserNodesParams {
-  status?: 'pending' | 'published' | 'locked' | 'rejected'
+  status?: 'pending' | 'published' | 'archived'
   skip?: number
   limit?: number
 }

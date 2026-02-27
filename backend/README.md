@@ -28,7 +28,7 @@
 ## 技术栈
 
 - **Web 框架**: FastAPI 0.100+
-- **数据库**: MySQL + SQLAlchemy 2.0 (async)
+- **数据库**: PostgreSQL + SQLAlchemy 2.0 (async)
 - **认证**: JWT (python-jose)
 - **密码加密**: bcrypt (passlib)
 - **数据验证**: Pydantic 2.0
@@ -90,7 +90,7 @@ backend/
 ### 环境要求
 
 - Python 3.8+
-- MySQL 8.0+
+- PostgreSQL 14+
 
 ### 安装步骤
 
@@ -118,7 +118,7 @@ pip install -r requirements.txt
 
 ```env
 # 数据库配置
-DATABASE_URL=mysql+aiomysql://root:password@localhost:3306/bifurcation_db
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/tree_story_db
 
 # 安全配置（生产环境必须修改！）
 SECRET_KEY=your-very-secure-secret-key-here
@@ -133,9 +133,11 @@ ADMIN_PASSWORD=admin123
 
 5. **创建数据库**
 ```bash
-mysql -u root -p
-CREATE DATABASE bifurcation_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-EXIT;
+sudo -u postgres psql
+CREATE USER tree_story_user WITH PASSWORD 'your_password';
+CREATE DATABASE tree_story_db OWNER tree_story_user;
+GRANT ALL PRIVILEGES ON DATABASE tree_story_db TO tree_story_user;
+\q
 ```
 
 6. **运行数据库迁移**
@@ -167,7 +169,7 @@ uvicorn main:app --host 0.0.0.0 --port 8057 --workers 4
 
 | 配置项 | 说明 | 默认值 | 必填 |
 |--------|------|--------|------|
-| `DATABASE_URL` | MySQL 数据库连接字符串 | - | ✅ |
+| `DATABASE_URL` | PostgreSQL 数据库连接字符串 | - | ✅ |
 | `SECRET_KEY` | JWT 加密密钥 | GANGWAY | ✅ |
 | `ALGORITHM` | JWT 算法 | HS256 | ❌ |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token 过期时间（分钟） | 10080 (7天) | ❌ |
@@ -197,6 +199,21 @@ engine = create_async_engine(
 
 4. **邮件配置**: 配置真实的 SMTP 服务器
 
+### 开发环境使用 SQLite
+
+项目默认按环境切库：
+
+- `APP_ENV=dev`：使用 SQLite（`DEV_DATABASE_URL`）
+- `APP_ENV=prod`：使用 PostgreSQL（`DATABASE_URL`）
+
+推荐在 `.env` 中这样配置：
+
+```env
+APP_ENV=dev
+DEV_DATABASE_URL=sqlite+aiosqlite:///./dev.db
+DATABASE_URL=postgresql+asyncpg://tree_story_user:your_password@localhost:5432/tree_story_db
+```
+
 ## API 文档
 
 请参考worklist.md
@@ -208,7 +225,7 @@ engine = create_async_engine(
 alembic downgrade base
 alembic upgrade head
 # 或
-mysql -u root -p bifurcation_db < schema.sql
+python init_database.py
 ```
 
 ### Q: 如何创建管理员账号？

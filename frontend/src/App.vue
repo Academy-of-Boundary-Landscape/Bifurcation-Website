@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { NConfigProvider, darkTheme } from 'naive-ui'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import AuthLayout from '@/layouts/AuthLayout.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import { naiveThemeOverrides } from '@/theme/naive'
 
 const route = useRoute()
 
@@ -20,9 +22,11 @@ const layout = computed(() => {
 </script>
 
 <template>
-  <component :is="layout">
-    <RouterView />
-  </component>
+  <NConfigProvider :theme="darkTheme" :theme-overrides="naiveThemeOverrides">
+    <component :is="layout">
+      <RouterView />
+    </component>
+  </NConfigProvider>
 </template>
 
 <style scoped></style>

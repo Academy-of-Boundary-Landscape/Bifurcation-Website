@@ -312,7 +312,7 @@ async def update_user_me(
     summary="验证邮箱并发送重置密码验证码",
 )
 async def send_verification_code_for_password_reset(
-    email_data: user_schema.EmailVerify, 
+    email_data: user_schema.UserEmail,
     db: AsyncSession = Depends(get_db)
 ):
     # 检查邮箱是否已被注册且已验证
@@ -322,6 +322,18 @@ async def send_verification_code_for_password_reset(
         raise HTTPException(
             status_code=400,
             detail="该邮箱未注册或未激活",
+        )
+    recent_code_stmt = (
+        select(func.count())
+        .where(EmailVerificationCode.email == email_data.email)
+        .where(EmailVerificationCode.purpose == VerificationPurpose.PASSWORD_RESET)
+        .where(EmailVerificationCode.created_at >= datetime.utcnow() - timedelta(minutes=1))
+    )
+    recent_code_count = (await db.execute(recent_code_stmt)).scalar() or 0
+    if recent_code_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="请勿频繁发送验证码，1分钟内只能发送一次",
         )
     # 在数据库创建一个新的验证码
     verification_code = EmailVerificationCode(
@@ -337,6 +349,30 @@ async def send_verification_code_for_password_reset(
     await send_email_code(email_data.email, verification_code.code)
     
     return {"detail": "验证码已发送 (测试环境请查看控制台输出或直接使用 114514)"}
+
+
+@router.post(
+    "/change-password",
+    response_model=MessageResponse,
+    summary="登录态修改密码",
+)
+async def change_password(
+    password_data: user_schema.PasswordChange,
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not security.verify_password(password_data.old_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="当前密码错误")
+
+    if not security.is_password_strong(password_data.new_password):
+        raise HTTPException(status_code=400, detail="密码强度不足")
+
+    current_user.hashed_password = security.get_password_hash(password_data.new_password)
+    db.add(current_user)
+    await db.commit()
+    return {"detail": "密码修改成功"}
+
+
 @router.post(
     "/reset-password", 
     response_model=MessageResponse, 
@@ -348,18 +384,6 @@ async def reset_password(
 ):
     if not security.is_password_strong(reset_data.new_password):
         raise HTTPException(status_code=400, detail="密码强度不足")
-    # 检查是否存在一分钟内发送过的验证码
-    recent_code_stmt = (
-        select(func.count())
-        .where(EmailVerificationCode.email == reset_data.email)
-        .where(EmailVerificationCode.created_at >= datetime.utcnow() - timedelta(minutes=1))
-    )
-    recent_code_count = (await db.execute(recent_code_stmt)).scalar() or 0
-    if recent_code_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail="请勿频繁发送验证码，1分钟内只能发送一次",
-        )
     # 验证验证码
     result = await db.execute(
         select(EmailVerificationCode)
@@ -367,8 +391,10 @@ async def reset_password(
             EmailVerificationCode.email == reset_data.email,
             EmailVerificationCode.purpose == VerificationPurpose.PASSWORD_RESET,
             EmailVerificationCode.code == reset_data.code,
+            EmailVerificationCode.is_used == False,
             EmailVerificationCode.expires_at > datetime.utcnow()
         )
+        .order_by(EmailVerificationCode.created_at.desc())
     )
     verification_code = result.scalars().first()
     if not verification_code:
@@ -385,6 +411,9 @@ async def reset_password(
             status_code=400,
             detail="用户不存在",
         )
+
+    verification_code.is_used = True
+    db.add(verification_code)
     user.hashed_password = security.get_password_hash(reset_data.new_password)
     db.add(user)
     await db.commit()

@@ -149,7 +149,7 @@ CS- 🔍 **发现功能**: Feed 流、热门榜单、搜索
 ┌─────────────────────────────────────────────────────────────┐
 │                         后端 (Backend)                       │
 │                    FastAPI + SQLAlchemy                     │
-│                    MySQL + Alembic                          │
+│                  PostgreSQL + Alembic                       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -168,7 +168,7 @@ CS- 🔍 **发现功能**: Feed 流、热门榜单、搜索
 #### 后端
 - **框架**: FastAPI
 - **语言**: Python 3.8+
-- **数据库**: MySQL 8.0+
+- **数据库**: PostgreSQL 14+
 - **ORM**: SQLAlchemy 2.0 (async)
 - **认证**: JWT (python-jose)
 - **数据验证**: Pydantic 2.0
@@ -181,7 +181,7 @@ CS- 🔍 **发现功能**: Feed 流、热门榜单、搜索
 
 - Node.js 18+
 - Python 3.8+
-- MySQL 8.0+
+- PostgreSQL 14+
 - Git
 
 ### 环境配置
@@ -212,9 +212,11 @@ cp .env.example .env
 # 编辑 .env 文件，配置数据库等信息
 
 # 创建数据库
-mysql -u root -p
-CREATE DATABASE bifurcation_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-EXIT;
+sudo -u postgres psql
+CREATE USER tree_story_user WITH PASSWORD 'your_password';
+CREATE DATABASE tree_story_db OWNER tree_story_user;
+GRANT ALL PRIVILEGES ON DATABASE tree_story_db TO tree_story_user;
+\q
 
 # 运行数据库迁移
 alembic upgrade head

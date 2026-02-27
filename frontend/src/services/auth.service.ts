@@ -8,6 +8,7 @@ import type {
   TokenResponse,
   UpdateProfileRequest,
   ResetPasswordRequest,
+  ChangePasswordRequest,
   MessageResponse,
   UserProfile,
 } from '@/types'
@@ -55,8 +56,13 @@ export const updateMe = (data: UpdateProfileRequest) => {
 }
 
 // 发送重置密码验证码
-export const sendPasswordResetCode = (data: EmailVerifyRequest) => {
+export const sendPasswordResetCode = (data: SendCodeRequest) => {
   return api.post<MessageResponse>('/auth/send-code-for-password-reset', data)
+}
+
+// 登录态修改密码
+export const changePassword = (data: ChangePasswordRequest) => {
+  return api.post<MessageResponse>('/auth/change-password', data)
 }
 
 // 重置密码

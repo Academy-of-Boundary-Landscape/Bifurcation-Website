@@ -33,15 +33,6 @@ class EmailVerify(BaseModel):
     code: str = Field(..., description="6位验证码")
 
 
-# 用户信息响应 (返回给前端的，严禁包含 password)
-class UserResponse(UserBase):
-    id: int
-    role: UserRole = Field(..., description="用户角色(管理员/写手/小黑屋)")
-    is_active: bool = Field(..., description="用户是否激活")
-    is_verified: bool = Field(..., description="邮箱验证状态")
-
-    class Config:
-        from_attributes = True # 让 Pydantic 支持读取 ORM 对象
 class UserUpdate(BaseModel):
     username: str | None = Field(None, min_length=2, max_length=50)
     bio: str | None = Field(None, max_length=200)
@@ -73,6 +64,11 @@ class UserProfileResponse(UserResponse):
 class PasswordReset(BaseModel):
     email: EmailStr = Field(..., description="用户邮箱")
     code: str = Field(..., description="6位验证码")
+    new_password: str = Field(..., min_length=6, description="新密码，至少6位")
+
+
+class PasswordChange(BaseModel):
+    old_password: str = Field(..., min_length=1, description="当前密码")
     new_password: str = Field(..., min_length=6, description="新密码，至少6位")
 
 

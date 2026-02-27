@@ -1,80 +1,161 @@
-from datetime import datetime
-from sqlalchemy import String, Text, Integer, ForeignKey, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
-from app.models.base import Base
+from __future__ import annotations
 import enum
+from datetime import datetime
+from typing import Optional, Dict, Any
 
-from sqlalchemy import Enum as SAEnum
-
+from sqlalchemy import (
+    Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, Integer,
+    String, Text
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 from sqlalchemy.sql import func
-from sqlalchemy import DateTime
+
+# PostgreSQL JSON / SQLite text: SQLAlchemy JSON 在两者都能用（SQLite会当TEXT存）
+from sqlalchemy.types import JSON
+
+from app.models.base import Base
+
 
 class NodeStatus(str, enum.Enum):
     PENDING = "pending"
     PUBLISHED = "published"
-    LOCKED = "locked"
-    REJECTED = "rejected"
+    ARCHIVED = "archived"
 
-# 点赞关联表 (多对多: 用户 <-> 节点)
-class NodeLike(Base):
-    __tablename__ = "node_likes"
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    node_id: Mapped[int] = mapped_column(ForeignKey("story_nodes.id"), primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
-    # 关联方便查询
-    user = relationship("User", back_populates="likes")
-    node = relationship("StoryNode", back_populates="likes_relationship")
+class NodeVisibility(str, enum.Enum):
+    PRIVATE = "private"     # 待审/作者自见
+    PUBLIC = "public"       # 对外公开
+    UNLISTED = "unlisted"   # 直链可见，不进列表
+
+
+class NodeZone(str, enum.Enum):
+    LONG = "long"
+    SHORT = "short"
+
 
 class StoryNode(Base):
     __tablename__ = "story_nodes"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    
-    # 归属哪本书 (哪个活动)
-    book_id: Mapped[int] = mapped_column(ForeignKey("story_books.id"), index=True, nullable=False)
-    
-    # 树结构
-    parent_id: Mapped[int | None] = mapped_column(ForeignKey("story_nodes.id"), nullable=True)
-    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    
-    # 内容
-    title: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    content: Mapped[str] = mapped_column(Text)
-    summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    branch_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    
-    # 数据统计
-    status: Mapped[NodeStatus] = mapped_column(SAEnum(NodeStatus,name="node_status"), default=NodeStatus.PENDING, index=True)
-    depth: Mapped[int] = mapped_column(Integer, default=1)
-    likes_count: Mapped[int] = mapped_column(Integer, default=0) # 缓存点赞数，避免频繁count查询
-    
-    # 时间节点
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),nullable=False,index=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False, index=True)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    # 关系
-    book = relationship("StoryBook", back_populates="nodes")
-    author = relationship("User", back_populates="nodes")
-    
-    # 树状关系
-    children = relationship(
-    "StoryNode",
-    backref=backref("parent", remote_side=[id]),
-    cascade="save-update, merge",   # 不要 delete-orphan
-    passive_deletes=True,
-    )   
-    parent_id = mapped_column(ForeignKey("story_nodes.id", ondelete="RESTRICT"), nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
 
-    
-    # 点赞关系
-    likes_relationship = relationship("NodeLike", back_populates="node", cascade="all, delete-orphan")
-    # 评论关系
-    comments = relationship(
-    "StoryComment",
-    back_populates="node",
-    cascade="all, delete-orphan",  # 节点删除时评论一起删 OK
+    book_id: Mapped[int] = mapped_column(
+        ForeignKey("story_books.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
 
-    def __repr__(self):
-        return f"<Node {self.id} (Book: {self.book_id})>"
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("story_nodes.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
+    # 强烈建议：根节点id，加速聚合/热榜/树统计
+    root_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    author_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    # ---- content ----
+    title: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    branch_name: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(String(600), nullable=True)
+
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    word_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+
+    # ---- lifecycle / visibility ----
+    status: Mapped[NodeStatus] = mapped_column(
+        SAEnum(NodeStatus, name="node_status"),
+        default=NodeStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+
+    visibility: Mapped[NodeVisibility] = mapped_column(
+        SAEnum(NodeVisibility, name="node_visibility"),
+        default=NodeVisibility.PRIVATE,
+        nullable=False,
+        index=True,
+    )
+
+    zone: Mapped[NodeZone] = mapped_column(
+        SAEnum(NodeZone, name="node_zone"),
+        default=NodeZone.SHORT,
+        nullable=False,
+        index=True,
+    )
+
+    # ---- moderation / review audit ----
+    reviewed_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    reject_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    archived_reason: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+
+    # ---- behavior flags ----
+    is_ending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    freeze_interactions: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+
+    # ---- ops / featuring ----
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    feature_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+
+    # ---- counters ----
+    likes_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    comments_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    children_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    last_activity_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )
+
+    # ---- style ----
+    # 用 style_key 管理大部分视觉；style_json 做少量覆盖（管理员写）
+    style_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    style_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    style_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+
+    # ---- timestamps ----
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False, index=True)
+
+    # ---- relationships ----
+    book = relationship("StoryBook", back_populates="nodes")
+    author = relationship("User", back_populates="nodes", foreign_keys=[author_id])
+
+    # 审核人（可选）
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+    children = relationship(
+        "StoryNode",
+        backref=backref("parent", remote_side=[id]),
+        cascade="save-update, merge",
+        passive_deletes=False,
+    )
+
+    __table_args__ = (
+        # 常用：某节点下公开子节点
+        Index("ix_nodes_parent_public", "book_id", "parent_id", "status", "visibility", "published_at"),
+        # 常用：书内最新发布
+        Index("ix_nodes_book_latest", "book_id", "status", "visibility", "published_at"),
+        # 常用：书内热门
+        Index("ix_nodes_book_hot", "book_id", "status", "visibility", "likes_count"),
+        # 常用：树内聚合/热榜
+        Index("ix_nodes_root_hot", "root_id", "status", "visibility", "likes_count"),
+    )

@@ -1,0 +1,8 @@
+<svg width="220" height="44" viewBox="0 0 220 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="42" height="42" stroke="white" stroke-opacity="0.82" stroke-width="2"/>
+  <path d="M10 33L22 11L34 33" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="square"/>
+  <path d="M14 27H30" stroke="#22C55E" stroke-width="2"/>
+  <path d="M53 13H145" stroke="white" stroke-opacity="0.72"/>
+  <text x="53" y="30" fill="white" font-size="18" font-family="Inter, Segoe UI, Arial" letter-spacing="2">TREE STORY</text>
+  <rect x="152" y="21" width="52" height="2" fill="#3B82F6"/>
+</svg>

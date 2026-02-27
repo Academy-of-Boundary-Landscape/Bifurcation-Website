@@ -20,6 +20,11 @@ export const getBooks = (params?: { skip?: number; limit?: number }) => {
   return api.get<StoryBook[]>('/story/books', { params })
 }
 
+// 获取活动详情
+export const getBookDetail = (bookId: number) => {
+  return api.get<StoryBook>(`/story/books/${bookId}`)
+}
+
 // 创建活动 [Admin]
 export const createBook = (data: CreateBookRequest) => {
   return api.post<StoryBook>('/story/books', data)
