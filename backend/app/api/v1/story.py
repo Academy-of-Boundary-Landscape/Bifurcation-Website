@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import desc, select, text, or_
+from sqlalchemy import desc, select, text, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, defer, raiseload
 
@@ -556,12 +556,30 @@ async def update_story_node(
     response_model=node_schema.MessageResponse,
     summary="软删除节点（标记为 archived）",
     operation_id="deleteNode",
+    responses={
+        200: {"description": "节点已归档"},
+        401: {"model": common_schema.ErrorResponse, "description": "未认证"},
+        403: {"model": common_schema.ErrorResponse, "description": "无权删除"},
+        404: {"model": common_schema.ErrorResponse, "description": "节点不存在"},
+    }
 )
 async def delete_story_node(
     node_id: int = Path(..., ge=1),
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    软删除节点：将节点标记为 archived，而非真正从数据库删除。
+    
+    权限规则：
+    - 仅作者本人或管理员可以删除
+    - 被驳回（archived）的节点会自动对普通用户隐藏
+    
+    注意：
+    - 不会检查节点是否有子节点（允许删除有子节点的节点）
+    - 删除后节点仍保留在数据库中，状态变为 archived
+    - 作者和管理员仍可查看被删除的节点
+    """
     node = await db.get(StoryNode, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="节点不存在")
@@ -577,6 +595,15 @@ async def delete_story_node(
         node.archived_at = datetime.now(timezone.utc)
         node.archived_reason = "用户主动删除"
         db.add(node)
+        
+        # 🔧 修复问题 5: 更新父节点的 children_count
+        if node.parent_id is not None:
+            await db.execute(
+                update(StoryNode)
+                .where(StoryNode.id == node.parent_id)
+                .values(children_count=StoryNode.children_count - 1)
+            )
+        
         await db.commit()
     except Exception as e:
         await db.rollback()

@@ -154,7 +154,12 @@ async def create_node_comment(
     )
     db.add(comment)
 
-    # 触发通知（自己评论自己不通知）
+    # 🛡️ 同步更新节点的评论计数器
+    if node.comments_count is None:
+        node.comments_count = 0
+    node.comments_count += 1
+
+    # 触发通知（自己评论自己不通知，send_notification 内部已处理）
     await send_notification(
         db=db,
         receiver_id=node.author_id,
@@ -289,3 +294,69 @@ async def mark_notifications_read(
     await db.execute(stmt)
     await db.commit()
     return {"detail": "全部通知已标记为已读"}
+
+
+# ==========================================
+# 🗑️ 评论删除模块 (Comment Deletion)
+# ==========================================
+
+@router.delete(
+    "/comment/{comment_id}",
+    response_model=MessageResponse,
+    summary="软删除评论",
+    operation_id="deleteComment",
+    responses={
+        200: {"description": "评论已删除"},
+        401: {"model": common_schema.ErrorResponse, "description": "未认证"},
+        403: {"model": common_schema.ErrorResponse, "description": "无权删除"},
+        404: {"model": common_schema.ErrorResponse, "description": "评论不存在"},
+    },
+)
+async def delete_comment(
+    comment_id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    软删除评论：将评论标记为 deleted，而非真正从数据库删除。
+    
+    权限规则：
+    - 仅评论作者或管理员可以删除
+    
+    🔧 修复问题 6: 删除时同步更新节点的 comments_count
+    """
+    comment = await db.get(StoryComment, comment_id)
+    if not comment:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    
+    # 权限检查：仅作者或管理员可删除
+    is_admin = current_user.role == UserRole.ADMIN
+    is_author = comment.user_id == current_user.id
+    
+    if not is_admin and not is_author:
+        raise HTTPException(status_code=403, detail="无权删除此评论")
+    
+    if comment.deleted_at is not None:
+        return {"detail": "评论已是已删除状态"}
+    
+    try:
+        # 软删除评论
+        comment.deleted_at = datetime.now(timezone.utc)
+        comment.deleted_by = current_user.id
+        db.add(comment)
+        
+        # 🔧 修复问题 6: 同步更新节点的 comments_count
+        node = await db.get(StoryNode, comment.node_id)
+        if node:
+            if node.comments_count is None:
+                node.comments_count = 0
+            if node.comments_count > 0:
+                node.comments_count -= 1
+            db.add(node)
+        
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="删除失败") from e
+    
+    return {"detail": "评论已删除"}

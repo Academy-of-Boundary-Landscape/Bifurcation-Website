@@ -1,32 +1,25 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { NConfigProvider, darkTheme } from 'naive-ui'
+import { NConfigProvider, NGlobalStyle, NMessageProvider, NDialogProvider } from 'naive-ui'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
-import AuthLayout from '@/layouts/AuthLayout.vue'
-import AdminLayout from '@/layouts/AdminLayout.vue'
-import { naiveThemeOverrides } from '@/theme/naive'
 
-const route = useRoute()
-
-// 根据路由 meta 信息动态选择布局
-const layout = computed(() => {
-  const layoutName = route.meta.layout || 'default'
-  const layouts: Record<string, any> = {
-    default: DefaultLayout,
-    auth: AuthLayout,
-    admin: AdminLayout,
-  }
-  return layouts[layoutName] || DefaultLayout
-})
+// 深色主题配置
+const themeOverrides = {
+  common: {
+    primaryColor: '#8b5cf6',
+    primaryColorHover: '#7c3aed',
+    primaryColorPressed: '#6d28d9',
+    borderRadius: '8px',
+  },
+}
 </script>
 
 <template>
-  <NConfigProvider :theme="darkTheme" :theme-overrides="naiveThemeOverrides">
-    <component :is="layout">
-      <RouterView />
-    </component>
-  </NConfigProvider>
+  <n-config-provider :theme-overrides="themeOverrides" abstract>
+    <n-global-style />
+    <n-message-provider>
+      <n-dialog-provider>
+        <DefaultLayout />
+      </n-dialog-provider>
+    </n-message-provider>
+  </n-config-provider>
 </template>
-
-<style scoped></style>

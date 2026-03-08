@@ -30,12 +30,10 @@ def verify_email_code(code: str, actual_code: str) -> bool:
     """验证邮箱验证码是否正确, 暂时不用hash"""
     return code == actual_code
 def is_password_strong(password: str) -> bool:
-    """检查密码强度，至少8位，包含字母和数字"""
-    if len(password) < 8:
+    """检查密码强度，至少 6 位（与 API 文档一致）"""
+    if len(password) < 6:
         return False
     if len(password) > 256:
         # 防止过长密码把系统拖垮
         return False
-    has_letter = any(c.isalpha() for c in password)
-    has_digit = any(c.isdigit() for c in password)
-    return has_letter and has_digit
+    return True

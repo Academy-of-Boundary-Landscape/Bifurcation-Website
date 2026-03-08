@@ -19,13 +19,19 @@ class Settings(BaseSettings):
     DATABASE_URL: str = _resolve_database_url()
     SECRET_KEY: str = os.getenv("SECRET_KEY", "GANGWAY")  # 请在生产环境中使用更安全的密钥
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7天过期
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 天过期
 
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "admin@example.com")
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123")
 
-    
+    # CORS 配置
+    CORS_ORIGINS: list = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
 
     class Config:
         env_file = ".env"

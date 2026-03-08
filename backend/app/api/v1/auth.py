@@ -83,7 +83,7 @@ async def send_verification_code(
 @router.post(
     "/verify-email-for-activation", 
     response_model=MessageResponse, 
-    summary="验证邮箱验证码, 用于激活账号",
+    summary="验证邮箱验证码，用于激活账号",
 )
 async def verify_email(
     verify_in: user_schema.EmailVerify,
@@ -91,6 +91,20 @@ async def verify_email(
 ):
     code = verify_in.code
     email = verify_in.email
+
+    # 🔒 安全限制：15 分钟内最多尝试 5 次验证码
+    recent_attempts_stmt = (
+        select(func.count())
+        .where(EmailVerificationCode.email == email)
+        .where(EmailVerificationCode.purpose == VerificationPurpose.REGISTER)
+        .where(EmailVerificationCode.created_at >= datetime.utcnow() - timedelta(minutes=15))
+    )
+    recent_attempts_count = (await db.execute(recent_attempts_stmt)).scalar() or 0
+    if recent_attempts_count >= 5:
+        raise HTTPException(
+            status_code=400,
+            detail="验证码尝试次数过多，请 15 分钟后再试",
+        )
 
     # 在数据库中查找最新的未使用且未过期的验证码
     stmt = (
@@ -107,6 +121,16 @@ async def verify_email(
         raise HTTPException(status_code=400, detail="验证码无效或已过期")
     # 检测验证码是否匹配
     if not security.verify_email_code(code, verification_code.code):
+        # 🔒 标记此次尝试（用于统计 15 分钟内的尝试次数）
+        failed_attempt = EmailVerificationCode(
+            email=email,
+            purpose=VerificationPurpose.REGISTER,
+            code="FAILED_ATTEMPT",  # 标记为失败尝试
+            expires_at=datetime.utcnow() - timedelta(hours=1),  # 立即过期
+            is_used=True,
+        )
+        db.add(failed_attempt)
+        await db.commit()
         raise HTTPException(status_code=400, detail="验证码错误")
     # 标记验证码为已使用
     verification_code.is_used = True
@@ -117,6 +141,11 @@ async def verify_email(
     user: Optional[User] = user_result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 🔒 检查账号是否被封禁
+    if user.role == UserRole.BANNED or not user.is_active:
+        raise HTTPException(status_code=400, detail="该账号已被封禁")
+    
     user.is_verified = True
     db.add(user)
 
@@ -132,7 +161,7 @@ async def verify_email(
 @router.post(
     "/register", 
     response_model=user_schema.UserCreateResponse, 
-    summary="用户注册",
+    summary="用户注册（需要邮箱验证码）",
 )
 async def register(
     user_in: user_schema.UserCreate,
@@ -151,6 +180,29 @@ async def register(
     # 检查密码安全性
     if not security.is_password_strong(user_in.password):
         raise HTTPException(status_code=400, detail="密码强度不足")
+    
+    # 🔒 验证邮箱验证码（worklist 要求注册需要邮箱验证码）
+    # 查找是否有有效的验证码
+    code_stmt = (
+        select(EmailVerificationCode)
+        .where(EmailVerificationCode.email == user_in.email.strip().lower())
+        .where(EmailVerificationCode.purpose == VerificationPurpose.REGISTER)
+        .where(EmailVerificationCode.is_used == False)
+        .where(EmailVerificationCode.expires_at > datetime.utcnow())
+        .order_by(EmailVerificationCode.created_at.desc())
+    )
+    code_result = await db.execute(code_stmt)
+    verification_code: Optional[EmailVerificationCode] = code_result.scalars().first()
+    if not verification_code:
+        raise HTTPException(
+            status_code=400,
+            detail="请先获取并验证邮箱验证码，再完成注册"
+        )
+    
+    # 标记验证码为已使用
+    verification_code.is_used = True
+    db.add(verification_code)
+    await db.commit()
     user = User(
         email=user_in.email.strip().lower(),
         username=user_in.username.strip(),
@@ -309,19 +361,27 @@ async def update_user_me(
 @router.post(
     "/send-code-for-password-reset", 
     response_model=MessageResponse, 
-    summary="验证邮箱并发送重置密码验证码",
+    summary="发送重置密码验证码",
+    operation_id="sendPasswordResetCode",
 )
 async def send_verification_code_for_password_reset(
     email_data: user_schema.UserEmail,
     db: AsyncSession = Depends(get_db)
 ):
-    # 检查邮箱是否已被注册且已验证
+    # 检查邮箱是否已被注册
     result = await db.execute(select(User).where(User.email == email_data.email))
     user = result.scalars().first()
-    if not user or not user.is_verified:
+    if not user:
         raise HTTPException(
             status_code=400,
-            detail="该邮箱未注册或未激活",
+            detail="该邮箱未注册",
+        )
+    
+    # 检查用户是否被封禁
+    if not user.is_active or user.role == UserRole.BANNED:
+        raise HTTPException(
+            status_code=400,
+            detail="该账号已被封禁",
         )
     recent_code_stmt = (
         select(func.count())
@@ -330,10 +390,10 @@ async def send_verification_code_for_password_reset(
         .where(EmailVerificationCode.created_at >= datetime.utcnow() - timedelta(minutes=1))
     )
     recent_code_count = (await db.execute(recent_code_stmt)).scalar() or 0
-    if recent_code_count > 0:
+    if recent_code_count >= 2:  # 1 分钟内最多 2 次
         raise HTTPException(
             status_code=400,
-            detail="请勿频繁发送验证码，1分钟内只能发送一次",
+            detail="请勿频繁发送验证码，1 分钟内最多发送 2 次",
         )
     # 在数据库创建一个新的验证码
     verification_code = EmailVerificationCode(
@@ -376,14 +436,28 @@ async def change_password(
 @router.post(
     "/reset-password", 
     response_model=MessageResponse, 
-    summary="重置密码",
+    summary="使用验证码重置密码",
+    operation_id="resetPassword",
+    responses={
+        200: {"description": "密码重置成功"},
+        400: {"model": MessageResponse, "description": "验证码无效/已过期/密码强度不足/账号被封禁"},
+        422: {"model": common_schema.ValidationErrorResponse, "description": "参数校验失败"},
+    }
 )
 async def reset_password(
     reset_data: user_schema.PasswordReset,
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    使用邮箱验证码重置密码。
+    
+    流程：
+    1. 用户先调用 /send-code-for-password-reset 获取验证码
+    2. 用户收到邮件后，调用此接口提交新密码和验证码
+    """
     if not security.is_password_strong(reset_data.new_password):
-        raise HTTPException(status_code=400, detail="密码强度不足")
+        raise HTTPException(status_code=400, detail="密码强度不足，至少 6 位")
+    
     # 验证验证码
     result = await db.execute(
         select(EmailVerificationCode)
@@ -410,6 +484,13 @@ async def reset_password(
         raise HTTPException(
             status_code=400,
             detail="用户不存在",
+        )
+    
+    # 检查账号状态
+    if not user.is_active or user.role == UserRole.BANNED:
+        raise HTTPException(
+            status_code=400,
+            detail="该账号已被封禁",
         )
 
     verification_code.is_used = True

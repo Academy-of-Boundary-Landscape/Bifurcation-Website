@@ -1,51 +1,56 @@
-import { defineConfig, presetUno, presetAttributify, presetIcons, presetWind } from 'unocss'
+import { defineConfig, presetAttributify, presetTypography, presetUno, presetIcons, presetWebFonts } from 'unocss'
 
 export default defineConfig({
   presets: [
     presetUno(),
     presetAttributify(),
+    presetTypography(),
     presetIcons({
       scale: 1.2,
       warn: true,
     }),
-    presetWind(),
+    presetWebFonts({
+      fonts: {
+        sans: 'Inter:400,500,600,700',
+        mono: 'Fira Code',
+      },
+    }),
   ],
   shortcuts: {
-    'flex-center': 'flex items-center justify-center',
-    'flex-between': 'flex items-center justify-between',
-    'flex-col-center': 'flex flex-col items-center justify-center',
-    'absolute-center': 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
-    'text-ellipsis': 'truncate overflow-hidden whitespace-nowrap',
-    'sci-panel': 'tech-panel bg-bg-surface border border-line-primary rounded-none relative overflow-hidden',
-    'sci-divider': 'border-0 border-t border-line-muted',
-    'sci-accent-text': 'text-accent-violet',
+    // 布局
+    'flex-center': 'flex justify-center items-center',
+    'flex-between': 'flex justify-between items-center',
+    'flex-start': 'flex justify-start items-center',
+    'flex-col-center': 'flex flex-col justify-center items-center',
+    
+    // 容器
+    'container-base': 'max-w-6xl mx-auto px-4',
+    'card-base': 'bg-#1a1a1a border border-#2a2a2a rounded-lg p-4',
+    
+    // 文字
+    'text-primary': 'text-#ffffff',
+    'text-secondary': 'text-#a0a0a0',
+    'text-muted': 'text-#666666',
+    
+    // 颜色
+    'bg-primary': 'bg-#000000',
+    'bg-secondary': 'bg-#0f0f0f',
+    'bg-card': 'bg-#1a1a1a',
+    
+    // 边框
+    'border-base': 'border border-#2a2a2a',
+    
+    // 过渡
+    'transition-base': 'transition-all duration-200 ease-in-out',
   },
   theme: {
     colors: {
-      bg: {
-        base: '#000000',
-        surface: '#050507',
-      },
-      text: {
-        primary: '#ffffff',
-        muted: '#a1a1aa',
-      },
-      line: {
-        primary: 'rgba(255,255,255,0.72)',
-        muted: 'rgba(255,255,255,0.28)',
-      },
-      accent: {
-        violet: '#7c3aed',
-        blue: '#3b82f6',
-        green: '#22c55e',
-      },
-      primary: '#7c3aed',
-      primaryHover: '#8b5cf6',
-      secondary: '#3b82f6',
-      success: '#22c55e',
-      warning: '#f59e0b',
-      error: '#ef4444',
-      info: '#3b82f6',
+      primary: '#000000',
+      secondary: '#0f0f0f',
+      card: '#1a1a1a',
+      border: '#2a2a2a',
+      muted: '#666666',
+      accent: '#8b5cf6', // 紫色强调色
     },
   },
 })

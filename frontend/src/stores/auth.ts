@@ -1,75 +1,110 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as loginApi, getMe as getMeApi } from '@/services/auth.service'
-import type { UserProfile, LoginFormData } from '@/types'
+import type { User } from '@/types/models'
+import type { TokenResponse } from '@/types/api'
+import { post, get, patch } from '@/services/http'
+
+const TOKEN_KEY = 'auth_access_token'
+const USER_KEY = 'auth_user'
 
 export const useAuthStore = defineStore('auth', () => {
-  // State
-  const token = ref<string | null>(localStorage.getItem('token'))
-  const user = ref<UserProfile | null>(null)
+  // 状态
+  const accessToken = ref<string | null>(localStorage.getItem(TOKEN_KEY))
+  const savedUser = localStorage.getItem(USER_KEY)
+  const currentUser = ref<User | null>(savedUser ? JSON.parse(savedUser) : null)
 
-  // Getters
-  const isLoggedIn = computed(() => !!token.value)
-  const isAdmin = computed(() => user.value?.role === 'admin')
-  const isWriter = computed(() => user.value?.role === 'writer')
-  const isBanned = computed(() => user.value?.role === 'banned')
+  // 计算属性
+  const isAuthenticated = computed(() => !!accessToken.value)
+  const isAdmin = computed(() => currentUser.value?.role === 'admin')
+  const isWriter = computed(() => currentUser.value?.role === 'writer')
+  const isBanned = computed(() => currentUser.value?.role === 'banned')
 
-  // Actions
-  const setToken = (newToken: string) => {
-    token.value = newToken
-    localStorage.setItem('token', newToken)
+  // 方法 - 登录
+  async function login(emailOrUsername: string, password: string) {
+    const formData = new FormData()
+    formData.append('username', emailOrUsername)
+    formData.append('password', password)
+    
+    const response = await post<TokenResponse>('/auth/login', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    })
+    
+    accessToken.value = response.access_token
+    localStorage.setItem(TOKEN_KEY, response.access_token)
+    
+    // 获取用户信息
+    await fetchCurrentUser()
+    
+    return response
   }
 
-  const setUser = (userData: UserProfile) => {
-    user.value = userData
-  }
-
-  const login = async (data: LoginFormData) => {
-    const response = await loginApi(data)
-    setToken(response.data.access_token)
-    // 登录成功后获取用户信息
-    await fetchUser()
-    return response.data
-  }
-
-  const fetchUser = async () => {
-    if (!token.value) return
-    const response = await getMeApi()
-    setUser(response.data)
-  }
-
-  const logout = () => {
-    token.value = null
-    user.value = null
-    localStorage.removeItem('token')
-  }
-
-  const updateUser = (userData: Partial<UserProfile>) => {
-    if (user.value) {
-      user.value = { ...user.value, ...userData }
+  // 方法 - 获取当前用户信息
+  async function fetchCurrentUser() {
+    try {
+      const user = await get<User>('/auth/me')
+      currentUser.value = user
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+      return user
+    } catch (error) {
+      // 如果获取失败，清除状态
+      logout()
+      throw error
     }
   }
 
-  // 初始化时如果有 token，获取用户信息
-  if (token.value) {
-    fetchUser().catch(() => {
-      // 如果获取用户信息失败，清除 token
-      logout()
+  // 方法 - 登出
+  function logout() {
+    accessToken.value = null
+    currentUser.value = null
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(USER_KEY)
+  }
+
+  // 方法 - 注册
+  async function register(email: string, username: string, password: string) {
+    await post('/auth/register', {
+      email,
+      username,
+      password,
     })
   }
 
+  // 方法 - 发送验证码
+  async function sendCode(email: string) {
+    await post('/auth/send-code-for-activation', { email })
+  }
+
+  // 方法 - 验证邮箱
+  async function verifyEmail(email: string, code: string) {
+    await post('/auth/verify-email-for-activation', { email, code })
+  }
+
+  // 方法 - 更新用户资料
+  async function updateProfile(data: { username?: string; bio?: string; avatar?: string }) {
+    const user = await patch<User>('/auth/me', data)
+    currentUser.value = user
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
+    return user
+  }
+
   return {
-    token,
-    user,
-    isLoggedIn,
+    // 状态
+    accessToken,
+    currentUser,
+    // 计算属性
+    isAuthenticated,
     isAdmin,
     isWriter,
     isBanned,
-    setToken,
-    setUser,
+    // 方法
     login,
-    fetchUser,
     logout,
-    updateUser,
+    fetchCurrentUser,
+    register,
+    sendCode,
+    verifyEmail,
+    updateProfile,
   }
 })
