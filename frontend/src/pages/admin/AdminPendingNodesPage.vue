@@ -45,6 +45,17 @@ const { mutate: rejectNode, isPending: rejecting } = useMutation({
     message.error('拒绝失败，请重试')
   }
 })
+
+function handleReject(nodeId: number) {
+  const reason = window.prompt('请输入拒绝原因：')
+  if (reason && reason.trim()) {
+    rejectNode({ nodeId, reason: reason.trim() })
+  }
+}
+
+function handleApprove(nodeId: number) {
+  approveNode(nodeId)
+}
 </script>
 
 <template>
@@ -85,7 +96,7 @@ const { mutate: rejectNode, isPending: rejecting } = useMutation({
               <div class="flex items-center gap-3">
                 <n-avatar 
                   :size="32" 
-                  :src="node.author?.avatar"
+                  :src="node.author?.avatar ?? undefined"
                 >
                   {{ node.author?.username?.charAt(0).toUpperCase() }}
                 </n-avatar>
@@ -111,7 +122,7 @@ const { mutate: rejectNode, isPending: rejecting } = useMutation({
             <div class="flex flex-col sm:flex-row gap-3">
               <n-button 
                 type="success" 
-                @click="() => approveNode(node.id)"
+                @click="handleApprove(node.id)"
                 :loading="approving && pendingNodes.find(n => n.id === node.id)?.id === node.id"
                 :disabled="approving && pendingNodes.find(n => n.id === node.id)?.id === node.id"
               >
@@ -120,12 +131,7 @@ const { mutate: rejectNode, isPending: rejecting } = useMutation({
               
               <n-button 
                 type="error" 
-                @click="() => {
-                  const reason = prompt('请输入拒绝原因：')
-                  if (reason && reason.trim()) {
-                    rejectNode({ nodeId: node.id, reason: reason.trim() })
-                  }
-                }"
+                @click="handleReject(node.id)"
                 :loading="rejecting && pendingNodes.find(n => n.id === node.id)?.id === node.id"
                 :disabled="rejecting && pendingNodes.find(n => n.id === node.id)?.id === node.id"
               >

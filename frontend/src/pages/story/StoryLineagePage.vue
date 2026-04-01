@@ -34,6 +34,10 @@ const { mutate: toggleLike, isPending: togglingLike } = useMutation({
   },
 })
 
+function handleToggleLike() {
+  toggleLike()
+}
+
 function handleContinue() {
   if (!authStore.isAuthenticated) {
     router.push({ name: 'login', query: { redirect: route.fullPath } })
@@ -86,7 +90,7 @@ function handleBranch() {
                 <div class="flex items-center gap-4 text-#666666">
                   <n-avatar 
                     :size="32" 
-                    :src="item.author?.avatar"
+                    :src="item.author?.avatar ?? undefined"
                   >
                     {{ item.author?.username?.charAt(0).toUpperCase() }}
                   </n-avatar>
@@ -112,7 +116,7 @@ function handleBranch() {
             <!-- 操作按钮 -->
             <div class="mt-4 pt-4 border-t border-#2a2a2a">
               <nspace>
-                <n-button size="small" type="primary" @click="toggleLike" :loading="togglingLike && item.id === nodeId.value">
+                <n-button size="small" type="primary" @click="handleToggleLike" :loading="togglingLike && item.id === nodeId">
                   👍 {{ item.likes_count || 0 }} 赞
                 </n-button>
                 <n-button size="small" @click="$router.push({ name: 'story-node', params: { nodeId: item.id } })">

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '@/types/models'
-import type { SsoExchangeResponse, SsoLoginUrlResponse, TokenResponse } from '@/types/api'
+import type { SsoExchangeResponse, SsoLoginUrlResponse } from '@/types/api'
 import { post, get, patch } from '@/services/http'
 
 const TOKEN_KEY = 'auth_access_token'
@@ -23,27 +23,6 @@ export const useAuthStore = defineStore('auth', () => {
   function saveSession(token: string) {
     accessToken.value = token
     localStorage.setItem(TOKEN_KEY, token)
-  }
-
-// 方法 - 登录
-  async function login(emailOrUsername: string, password: string) {
-    const formData = new URLSearchParams()
-    formData.append('username', emailOrUsername)
-    formData.append('password', password)
-    formData.append('grant_type', 'password')
-    
-    const response = await post<TokenResponse>('/api/v1/auth/login', formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    })
-    
-    saveSession(response.access_token)
-    
-    // 获取用户信息
-    await fetchCurrentUser()
-    
-    return response
   }
 
   async function getSsoLoginUrl(redirectTo?: string) {
@@ -97,25 +76,6 @@ export const useAuthStore = defineStore('auth', () => {
     sessionStorage.removeItem(SSO_STATE_KEY)
   }
 
-  // 方法 - 注册
-  async function register(email: string, username: string, password: string) {
-    await post('/api/v1/auth/register', {
-      email,
-      username,
-      password,
-    })
-  }
-
-  // 方法 - 发送验证码
-  async function sendCode(email: string) {
-    await post('/api/v1/auth/send-code-for-activation', { email })
-  }
-
-  // 方法 - 验证邮箱
-  async function verifyEmail(email: string, code: string) {
-    await post('/api/v1/auth/verify-email-for-activation', { email, code })
-  }
-
   // 方法 - 更新用户资料
   async function updateProfile(data: { username?: string; bio?: string; avatar?: string }) {
     const user = await patch<User>('/api/v1/auth/me', data)
@@ -134,15 +94,11 @@ export const useAuthStore = defineStore('auth', () => {
     isWriter,
     isBanned,
     // 方法
-    login,
     getSsoLoginUrl,
     beginSsoLogin,
     exchangeSsoCode,
     logout,
     fetchCurrentUser,
-    register,
-    sendCode,
-    verifyEmail,
     updateProfile,
   }
 })

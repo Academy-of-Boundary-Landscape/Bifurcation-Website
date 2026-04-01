@@ -10,6 +10,16 @@ const emits = defineEmits(['confirm', 'cancel'])
 
 const showModal = ref(false)
 
+function handleConfirm() {
+  emits('confirm')
+  showModal.value = false
+}
+
+function handleCancel() {
+  emits('cancel')
+  showModal.value = false
+}
+
 // 页面离开前检查
 onBeforeUnmount(() => {
   if (props.isDirty) {
@@ -27,12 +37,12 @@ onBeforeUnmount(() => {
     preset="dialog"
     title="离开前确认"
     :content="'您有未保存的内容，是否保存为草稿？'"
-    @positive-click="() => { emits('confirm'); showModal.value = false; }"
-    @negative-click="() => { emits('cancel'); showModal.value = false; }"
+    @positive-click="handleConfirm"
+    @negative-click="handleCancel"
   >
     <template #action>
-      <n-button type="primary" @click="() => { emits('confirm'); showModal.value = false; }">保存草稿</n-button>
-      <n-button @click="() => { emits('cancel'); showModal.value = false; }">放弃离开</n-button>
+      <n-button type="primary" @click="handleConfirm">保存草稿</n-button>
+      <n-button @click="handleCancel">放弃离开</n-button>
     </template>
   </n-modal>
 </template>

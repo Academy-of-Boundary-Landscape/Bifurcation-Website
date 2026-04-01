@@ -16,6 +16,8 @@
   - Casdoor 的 `Redirect URL` / callback 该怎么填，以及和本站前端回调页的对应关系
 - `casdoor-sso-migration-plan.md`
   - Casdoor 接入背景、迁移策略和后续阶段规划
+- `frontend-tree-experience-plan.md`
+  - 树状小说前端展示方案草案，说明阅读视图、目录树、图谱视图和后续重构顺序
 - `changelog.md`
   - 本轮整理与改造记录
 

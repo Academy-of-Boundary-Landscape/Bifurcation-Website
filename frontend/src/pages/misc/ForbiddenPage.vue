@@ -37,7 +37,7 @@ function handleHome() {
             type="default" 
             size="large" 
             :component="RouterLink" 
-            to="{ name: 'profile' }"
+            :to="{ name: 'profile' }"
           >
             查看个人中心
           </n-button>

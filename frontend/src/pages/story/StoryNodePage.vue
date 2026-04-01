@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { NCard, NButton, NSpace, NTag, NSpin, NTimeline, NTimelineItem, NAvatar, NDivider, NUpload, NIcon, NProgress } from 'naive-ui'
+import { NCard, NButton, NSpace, NTag, NSpin, NAvatar } from 'naive-ui'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { computed, ref, onMounted, watch } from 'vue'
-import type { StoryNodeRead, StoryNode } from '@/types/models'
+import { computed, ref } from 'vue'
+import type { Comment, StoryNodeRead, StoryNode } from '@/types/models'
 import { useQuery, useMutation } from '@tanstack/vue-query'
-import { get, post, put, delete } from '@/services/http'
+import { del, get, post } from '@/services/http'
 import { useAuthStore } from '@/stores/auth'
 import { useMessage } from 'naive-ui'
-import { UploadFileInfo } from 'naive-ui/es/upload/src/interface'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,9 +34,9 @@ const { data: children } = useQuery<StoryNodeRead[]>({
 })
 
 // 获取评论
-const { data: comments } = useQuery({
+const { data: comments } = useQuery<Comment[]>({
   queryKey: ['node-comments', nodeId],
-  queryFn: () => get(`/interaction/node/${nodeId.value}/comments`),
+  queryFn: () => get<Comment[]>(`/interaction/node/${nodeId.value}/comments`),
 })
 
 // 点赞
@@ -60,16 +59,27 @@ const { mutate: submitComment, isPending: submittingComment } = useMutation({
 
 // 删除评论
 const { mutate: deleteComment, isPending: deletingComment } = useMutation({
-  mutationFn: (commentId: number) => delete(`/interaction/node/${nodeId.value}/comment/${commentId}`),
+  mutationFn: (commentId: number) => del(`/interaction/node/${nodeId.value}/comment/${commentId}`),
   onSuccess: (_, commentId) => {
     message.success('评论已删除')
     // 更新评论列表
     if (comments.value) {
-      const updatedComments = comments.value.filter((c: any) => c.id !== commentId)
-      comments.value = updatedComments
+      comments.value = comments.value.filter((comment) => comment.id !== commentId)
     }
   },
 })
+
+function handleToggleLike() {
+  toggleLike()
+}
+
+function handleSubmitComment() {
+  submitComment()
+}
+
+function handleDeleteComment(commentId: number) {
+  deleteComment(commentId)
+}
 
 // 处理续写
 function handleContinue() {
@@ -104,27 +114,21 @@ function handleDelete() {
     router.push({ name: 'login', query: { redirect: route.fullPath } })
     return
   }
-  
-  // 确认对话框
-  message.info(
-    '确定要删除这个节点吗？',
-    {
-      title: '确认删除',
-      positiveText: '确定',
-      negativeText: '取消',
-      onPositiveClick: async () => {
-        try {
-          await delete(`/story/node/${nodeId.value}`)
-          message.success('节点删除成功')
-          // 返回书籍详情页
-          router.push({ name: 'books' })
-        } catch (error) {
-          console.error('删除失败:', error)
-          message.error('删除失败，请重试')
-        }
-      }
+
+  if (!globalThis.confirm('确定要删除这个节点吗？')) {
+    return
+  }
+
+  void (async () => {
+    try {
+      await del(`/story/node/${nodeId.value}`)
+      message.success('节点删除成功')
+      router.push({ name: 'books' })
+    } catch (error) {
+      console.error('删除失败:', error)
+      message.error('删除失败，请重试')
     }
-  )
+  })()
 }
 </script>
 
@@ -144,7 +148,7 @@ function handleDelete() {
             <div class="flex items-center gap-4 text-#666666">
               <n-avatar 
                 :size="32" 
-                :src="node.author?.avatar ?? ''"
+                :src="node.author?.avatar ?? undefined"
               >
                 {{ node.author?.username?.charAt(0).toUpperCase() ?? '' }}
               </n-avatar>
@@ -159,7 +163,7 @@ function handleDelete() {
         
         <!-- 操作按钮 -->
         <nspace class="mb-4">
-          <n-button type="primary" @click="() => toggleLike()" :loading="togglingLike && node?.id === nodeId.value">
+            <n-button type="primary" @click="handleToggleLike" :loading="togglingLike && node?.id === nodeId">
             👍 {{ node.likes_count ?? 0 }} 赞
           </n-button>
           <n-button @click="handleContinue">
@@ -210,7 +214,7 @@ function handleDelete() {
             <div class="flex items-center gap-3">
               <n-avatar 
                 :size="32" 
-                :src="child.author?.avatar"
+                :src="child.author?.avatar ?? undefined"
               >
                 {{ child.author?.username?.charAt(0).toUpperCase() }}
               </n-avatar>
@@ -269,7 +273,7 @@ function handleDelete() {
           <div class="mt-4">
             <n-button 
               type="primary" 
-              @click="submitComment"
+              @click="handleSubmitComment"
               :loading="submittingComment"
               :disabled="!commentContent.trim() || submittingComment"
             >
@@ -292,7 +296,7 @@ function handleDelete() {
           >
             <n-avatar 
               :size="24" 
-              :src="comment.user?.avatar"
+              :src="comment.user?.avatar ?? undefined"
               class="mt-1"
             >
               {{ comment.user?.username?.charAt(0).toUpperCase() }}
@@ -306,7 +310,7 @@ function handleDelete() {
                   v-if="authStore.currentUser?.id === comment.user?.id" 
                   size="small" 
                   type="error" 
-                  @click="() => deleteComment(comment.id)"
+                  @click="handleDeleteComment(comment.id)"
                   :loading="deletingComment && comments.find(c => c.id === comment.id)?.id === comment.id"
                   :disabled="deletingComment && comments.find(c => c.id === comment.id)?.id === comment.id"
                 >
@@ -328,21 +332,13 @@ function handleDelete() {
               v-if="authStore.isAuthenticated" 
               type="primary" 
               size="large" 
-              @click="() => $refs.commentTextarea.focus()"
-            >
-              成为第一个评论者
-            </n-button>
+              disabled
+              >
+                成为第一个评论者
+              </n-button>
           </div>
         </div>
       </n-card>
     </n-spin>
   </div>
 </template>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [x] 实现 NotificationPage.vue 筛选功能
-- [x] 完善 StoryNodePage.vue 功能
-- [ ] 完善 StoryTreeFlow.vue 功能
-</task_progress>

@@ -11,6 +11,10 @@ const { data: users, isLoading, refetch } = useQuery<User[]>({
   queryKey: ['users'],
   queryFn: () => get<User[]>('/auth/users'),
 })
+
+function handleRefresh() {
+  void refetch()
+}
 </script>
 
 <template>
@@ -51,7 +55,7 @@ const { data: users, isLoading, refetch } = useQuery<User[]>({
               :size="40" 
               :src="user.avatar"
               class="cursor-pointer"
-              @click="$router.push({ name: 'profile', params: { userId: user.id } })"
+              @click="$router.push({ name: 'profile' })"
             >
               {{ user.username?.charAt(0).toUpperCase() }}
             </n-avatar>
@@ -81,7 +85,7 @@ const { data: users, isLoading, refetch } = useQuery<User[]>({
                 size="small" 
                 type="primary" 
                 :component="RouterLink" 
-                :to="{ name: 'profile', params: { userId: user.id } }"
+                :to="{ name: 'profile' }"
               >
                 查看资料
               </n-button>
@@ -89,7 +93,7 @@ const { data: users, isLoading, refetch } = useQuery<User[]>({
               <n-button 
                 size="small" 
                 type="default" 
-                @click="refetch"
+                @click="handleRefresh"
               >
                 刷新
               </n-button>

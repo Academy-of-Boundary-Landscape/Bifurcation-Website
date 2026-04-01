@@ -2,6 +2,7 @@
 import { NCard, NButton, NSpace, NTag, NSpin, NTimeline, NTimelineItem, NAvatar, NUpload, NIcon, NProgress } from 'naive-ui'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { computed, ref, onMounted, watch } from 'vue'
+import type { UploadOnChange } from 'naive-ui/es/upload/src/public-types'
 import type { User, StoryNodeRead } from '@/types/models'
 import { useQuery, useMutation } from '@tanstack/vue-query'
 import { get, put, post } from '@/services/http'
@@ -83,7 +84,7 @@ onMounted(() => {
 })
 
 // 文件选择处理
-function handleFileChange(file: any) {
+const handleFileChange: UploadOnChange = ({ file }) => {
   if (file.file) {
     avatarFile.value = file.file
     
@@ -151,9 +152,7 @@ watch(uploadingAvatar, (newVal) => {
               <div class="relative">
                 <n-avatar 
                   :size="120" 
-                  :src="avatarPreview || user?.avatar"
-                  class="cursor-pointer"
-                  @click="$refs.avatarUploadRef?.trigger()"
+                  :src="avatarPreview || user?.avatar || undefined"
                 >
                   {{ user?.username?.charAt(0).toUpperCase() ?? '' }}
                 </n-avatar>
@@ -281,12 +280,12 @@ watch(uploadingAvatar, (newVal) => {
         <n-spin :show="nodesLoading">
           <div v-if="!submittedNodes || submittedNodes.length === 0" class="text-center py-12">
             <p class="text-#666666">暂无投稿节点</p>
-            <n-button 
-              type="primary" 
-              class="mt-4" 
-              :component="RouterLink" 
-              to="{ name: 'books' }"
-            >
+              <n-button 
+                type="primary" 
+                class="mt-4" 
+                :component="RouterLink" 
+                :to="{ name: 'books' }"
+              >
               开始创作
             </n-button>
           </div>
@@ -316,7 +315,7 @@ watch(uploadingAvatar, (newVal) => {
                 </div>
                 <n-avatar 
                   :size="32" 
-                  :src="node.author?.avatar"
+                  :src="node.author?.avatar ?? undefined"
                   class="flex-shrink-0"
                 >
                   {{ node.author?.username?.charAt(0).toUpperCase() }}
@@ -329,19 +328,3 @@ watch(uploadingAvatar, (newVal) => {
     </n-spin>
   </div>
 </template>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [ ] 实现 NotificationPage.vue 筛选功能
-- [ ] 完善 StoryNodePage.vue 功能
-- [ ] 完善 StoryTreeFlow.vue 功能
-</task_progress>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [ ] 实现 NotificationPage.vue 筛选功能
-- [ ] 完善 StoryNodePage.vue 功能
-- [ ] 完善 StoryTreeFlow.vue 功能
-</task_progress>

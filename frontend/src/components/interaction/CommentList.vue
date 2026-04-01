@@ -31,6 +31,14 @@ const { mutate: deleteComment } = useMutation({
   }
 })
 
+function handleRefresh() {
+  void refetch()
+}
+
+function handleDeleteComment(commentId: number) {
+  deleteComment(commentId)
+}
+
 // 初始化
 onMounted(() => {
   if (commentData.value) {
@@ -44,7 +52,7 @@ onMounted(() => {
     <template #header>
       <div class="flex justify-between items-center">
         <h3 class="text-lg font-bold text-white">评论区 ({{ comments.length }})</h3>
-        <n-button size="small" @click="() => refetch()" v-if="!isLoading">刷新</n-button>
+        <n-button size="small" @click="handleRefresh" v-if="!isLoading">刷新</n-button>
       </div>
     </template>
     
@@ -70,7 +78,7 @@ onMounted(() => {
             <p class="text-#d9d9d9">{{ comment.content }}</p>
           </div>
           <div v-if="authStore.isAuthenticated && comment.user?.id === authStore.currentUser?.id" class="flex flex-col items-end">
-            <n-button size="small" @click="() => deleteComment(comment.id)">删除</n-button>
+            <n-button size="small" @click="handleDeleteComment(comment.id)">删除</n-button>
           </div>
         </div>
       </div>

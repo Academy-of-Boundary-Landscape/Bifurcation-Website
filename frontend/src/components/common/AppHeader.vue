@@ -91,7 +91,7 @@ function handleLogout() {
       <div v-if="authStore.isAuthenticated" class="flex items-center space-x-2">
         <n-avatar 
           :size="32"
-          :src="authStore.currentUser?.avatar"
+          :src="authStore.currentUser?.avatar ?? undefined"
         >
           {{ authStore.currentUser?.username?.charAt(0).toUpperCase() }}
         </n-avatar>
@@ -101,13 +101,13 @@ function handleLogout() {
       <!-- 登录/注册按钮 -->
       <div v-else class="flex space-x-2">
         <router-link 
-          to="{ name: 'login' }" 
+          :to="{ name: 'login' }" 
           class="text-#666666 hover:text-white transition-colors"
         >
           登录
         </router-link>
         <router-link 
-          to="{ name: 'register' }" 
+          :to="{ name: 'register' }" 
           class="text-#666666 hover:text-white transition-colors"
         >
           注册

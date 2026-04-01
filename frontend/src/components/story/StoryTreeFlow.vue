@@ -15,8 +15,6 @@ import {
   Controls,
   Background,
   MiniMap,
-  Node,
-  Edge,
   useNodes,
   useEdges,
   useStore,
@@ -33,6 +31,51 @@ import {
 import { computed, ref, onMounted, watch, nextTick } from 'vue'
 import type { StoryNodeTreeItem } from '@/types/models'
 
+type FlowNodeStatus = StoryNodeTreeItem['status']
+
+interface FlowStoryNodeData {
+  sourceId: number
+  title: string
+  author: string
+  status: FlowNodeStatus
+  likes_count: number
+  is_ending: boolean
+  summary: string
+}
+
+interface FlowPosition {
+  x: number
+  y: number
+}
+
+interface FlowStoryNode {
+  id: string
+  position: FlowPosition
+  data: FlowStoryNodeData
+  type: 'storyNode'
+}
+
+interface FlowStoryEdge {
+  id: string
+  source: string
+  target: string
+  animated: boolean
+  markerEnd: {
+    type: unknown
+    color: string
+    width: number
+    height: number
+  }
+}
+
+interface MiniMapNodeLike {
+  data?: Partial<FlowStoryNodeData>
+}
+
+interface FlowNodeClickPayload {
+  id: string
+}
+
 const props = defineProps<{
   tree: StoryNodeTreeItem[]
 }>()
@@ -48,9 +91,9 @@ const { nodesInitialized } = useNodesInitialized()
 const viewport = useViewport()
 
 // 将故事树转换为 Vue Flow 节点和边
-function convertToFlowData(items: StoryNodeTreeItem[]): { nodes: Node[], edges: Edge[] } {
-  const flowNodes: Node[] = []
-  const flowEdges: Edge[] = []
+function convertToFlowData(items: StoryNodeTreeItem[]): { nodes: FlowStoryNode[]; edges: FlowStoryEdge[] } {
+  const flowNodes: FlowStoryNode[] = []
+  const flowEdges: FlowStoryEdge[] = []
   
   function processNodes(nodes: StoryNodeTreeItem[], parentId: string | null = null, level: number = 0, index: number = 0) {
     nodes.forEach((node, i) => {
@@ -59,10 +102,11 @@ function convertToFlowData(items: StoryNodeTreeItem[]): { nodes: Node[], edges: 
       const y = (index + i) * 120 + 50
       
       // 创建节点
-      const nodeData: Node = {
+      const nodeData: FlowStoryNode = {
         id: node.id.toString(),
         position: { x, y },
         data: {
+          sourceId: node.id,
           title: node.branch_name || node.title || `节点${node.id}`,
           author: node.author?.username || '未知作者',
           status: node.status,
@@ -148,8 +192,24 @@ const customNodeTypes = {
   }
 }
 
+function resetViewport() {
+  setViewport({ x: 0, y: 0, zoom: 1 })
+}
+
+function emitNodeClick(sourceId: number) {
+  emit('node-click', sourceId)
+}
+
+function getMiniMapNodeColor(node: MiniMapNodeLike) {
+  const data = node?.data ?? {}
+  if (data.is_ending) return '#34d399'
+  if (data.status === 'published') return '#60a5fa'
+  if (data.status === 'pending') return '#f59e0b'
+  return '#ef4444'
+}
+
 // 节点点击事件
-function handleNodeClick(event: MouseEvent, node: Node) {
+function handleNodeClick(event: MouseEvent, node: FlowNodeClickPayload) {
   // 获取节点ID并跳转到详情页
   const nodeId = parseInt(node.id)
   if (!isNaN(nodeId)) {
@@ -159,7 +219,7 @@ function handleNodeClick(event: MouseEvent, node: Node) {
 }
 
 // 节点悬停效果
-function handleNodeMouseEnter(event: MouseEvent, node: Node) {
+function handleNodeMouseEnter(event: MouseEvent, node: FlowNodeClickPayload) {
   // 添加悬停效果
   const nodeEl = event.target as HTMLElement
   if (nodeEl) {
@@ -167,7 +227,7 @@ function handleNodeMouseEnter(event: MouseEvent, node: Node) {
   }
 }
 
-function handleNodeMouseLeave(event: MouseEvent, node: Node) {
+function handleNodeMouseLeave(event: MouseEvent, node: FlowNodeClickPayload) {
   // 移除悬停效果
   const nodeEl = event.target as HTMLElement
   if (nodeEl) {
@@ -191,7 +251,7 @@ const emit = defineEmits(['node-click'])
           <n-button size="small" @click="zoomTo(1)">
             缩放至100%
           </n-button>
-          <n-button size="small" @click="() => setViewport({ x: 0, y: 0, zoom: 1 })">
+          <n-button size="small" @click="resetViewport">
             居中显示
           </n-button>
         </n-space>
@@ -231,12 +291,7 @@ const emit = defineEmits(['node-click'])
           
           <!-- 迷你地图 -->
           <MiniMap 
-            :node-color="({ data }) => {
-              if (data.is_ending) return '#34d399'
-              if (data.status === 'published') return '#60a5fa'
-              if (data.status === 'pending') return '#f59e0b'
-              return '#ef4444'
-            }"
+            :node-color="getMiniMapNodeColor"
             :node-border-radius="8"
             :node-width="100"
             :node-height="60"
@@ -248,7 +303,7 @@ const emit = defineEmits(['node-click'])
             <div 
               class="relative p-4 w-48 cursor-pointer transition-all"
               :class="selected ? 'ring-2 ring-#8b5cf6 scale-105' : ''"
-              @click="() => emit('node-click', parseInt(data.id))"
+              @click="emitNodeClick(data.sourceId)"
             >
               <div class="absolute -top-2 -right-2">
                 <n-tag 
@@ -352,43 +407,3 @@ const emit = defineEmits(['node-click'])
   transform: scale(1.1);
 }
 </style>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [x] 实现 NotificationPage.vue 筛选功能
-- [x] 完善 StoryNodePage.vue 功能
-- [x] 完善 StoryTreeFlow.vue 功能
-</task_progress>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [x] 实现 NotificationPage.vue 筛选功能
-- [x] 完善 StoryNodePage.vue 功能
-- [x] 完善 StoryTreeFlow.vue 功能
-</task_progress>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [x] 实现 NotificationPage.vue 筛选功能
-- [x] 完善 StoryNodePage.vue 功能
-- [x] 完善 StoryTreeFlow.vue 功能
-</task_progress>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [x] 实现 NotificationPage.vue 筛选功能
-- [x] 完善 StoryNodePage.vue 功能
-- [x] 完善 StoryTreeFlow.vue 功能
-</task_progress>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [x] 实现 NotificationPage.vue 筛选功能
-- [x] 完善 StoryNodePage.vue 功能
-- [x] 完善 StoryTreeFlow.vue 功能
-</task_progress>

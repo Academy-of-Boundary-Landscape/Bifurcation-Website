@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import { handleError } from '@/utils/error-handler'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,8 +33,9 @@ async function finishSsoLogin() {
   try {
     const response = await authStore.exchangeSsoCode(code, state)
     router.replace(response.redirect_to || '/books')
-  } catch (error: any) {
-    errorMessage.value = error?.response?.data?.detail || error?.message || '登录交换失败，请稍后重试'
+  } catch (error) {
+    handleError(error, '登录交换失败，请稍后重试')
+    errorMessage.value = '登录交换失败，请稍后重试'
     loading.value = false
   }
 }

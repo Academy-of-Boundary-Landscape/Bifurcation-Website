@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { ref } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
+import { handleError } from '@/utils/error-handler'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -17,8 +18,9 @@ async function handleSsoLogin() {
   try {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/books'
     await authStore.beginSsoLogin(redirect)
-  } catch (error: any) {
-    errorMessage.value = error?.response?.data?.detail || error?.message || '获取 SSO 登录地址失败'
+  } catch (error) {
+    handleError(error, '获取 SSO 登录地址失败')
+    errorMessage.value = '获取 SSO 登录地址失败'
     loading.value = false
   } finally {
     if (errorMessage.value) {

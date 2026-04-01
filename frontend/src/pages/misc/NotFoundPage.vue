@@ -37,7 +37,7 @@ function handleHome() {
             type="default" 
             size="large" 
             :component="RouterLink" 
-            to="{ name: 'books' }"
+            :to="{ name: 'books' }"
           >
             查看故事册
           </n-button>

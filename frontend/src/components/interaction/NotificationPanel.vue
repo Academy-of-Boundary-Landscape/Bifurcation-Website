@@ -42,6 +42,18 @@ const { mutate: markAllAsRead } = useMutation({
     refetch()
   }
 })
+
+function handleRefresh() {
+  void refetch()
+}
+
+function handleMarkAsRead(notificationId: number) {
+  markAsRead(notificationId)
+}
+
+function handleMarkAllAsRead() {
+  markAllAsRead()
+}
 </script>
 
 <template>
@@ -51,8 +63,8 @@ const { mutate: markAllAsRead } = useMutation({
         <h2 class="text-xl font-bold text-white">通知中心</h2>
         <div class="flex items-center gap-2">
           <span class="text-sm text-#666666">{{ notifications?.length || 0 }} 条通知</span>
-          <span v-if="unreadCount?.unread_count > 0" class="text-sm text-#8b5cf6 bg-#2a2a2a px-2 py-1 rounded-full">
-            {{ unreadCount?.unread_count }} 条未读
+          <span v-if="(unreadCount?.unread_count ?? 0) > 0" class="text-sm text-#8b5cf6 bg-#2a2a2a px-2 py-1 rounded-full">
+            {{ unreadCount?.unread_count ?? 0 }} 条未读
           </span>
         </div>
       </div>
@@ -78,7 +90,7 @@ const { mutate: markAllAsRead } = useMutation({
             type="primary" 
             size="large" 
             :component="RouterLink" 
-            to="{ name: 'books' }"
+            :to="{ name: 'books' }"
           >
             开始创作
           </n-button>
@@ -86,7 +98,7 @@ const { mutate: markAllAsRead } = useMutation({
           <n-button 
             type="default" 
             size="large" 
-            @click="refetch"
+            @click="handleRefresh"
           >
             刷新
           </n-button>
@@ -100,7 +112,7 @@ const { mutate: markAllAsRead } = useMutation({
         v-for="notification in notifications" 
         :key="notification.id" 
         class="bg-#2a2a2a border-#3a3a3a hover:border-#4a4a4a transition-colors cursor-pointer"
-        @click="$router.push({ name: 'story-node', params: { nodeId: notification.node_id } })"
+            @click="$router.push({ name: 'story-node', params: { nodeId: notification.node_id } })"
       >
         <div class="flex items-start gap-4">
           <!-- 图标 -->
@@ -171,7 +183,7 @@ const { mutate: markAllAsRead } = useMutation({
               text 
               size="small" 
               class="text-#8b5cf6 hover:text-white transition-colors"
-              @click.stop="() => markAsRead(notification.id)"
+              @click.stop="handleMarkAsRead(notification.id)"
             >
               标记已读
             </n-button>
@@ -186,7 +198,7 @@ const { mutate: markAllAsRead } = useMutation({
         type="primary" 
         size="large" 
         :component="RouterLink" 
-        to="{ name: 'notifications' }"
+            :to="{ name: 'notifications' }"
       >
         查看全部通知
       </n-button>
@@ -194,7 +206,7 @@ const { mutate: markAllAsRead } = useMutation({
       <n-button 
         type="default" 
         size="large" 
-        @click="markAllAsRead"
+        @click="handleMarkAllAsRead"
       >
         全部标记为已读
       </n-button>

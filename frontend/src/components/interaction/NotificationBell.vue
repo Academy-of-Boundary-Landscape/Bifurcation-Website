@@ -15,6 +15,8 @@ const { data: unreadCount } = useQuery({
   queryFn: () => get<{ unread_count: number }>('/interaction/notifications/unread-count'),
 })
 
+const unreadCountValue = computed(() => unreadCount.value?.unread_count ?? 0)
+
 // 显示面板
 const showPanel = ref(false)
 
@@ -29,8 +31,8 @@ const { data: notificationData, isLoading } = useQuery({
   <div class="relative">
     <!-- 通知铃铛 -->
     <n-badge 
-      v-if="unreadCount?.unread_count > 0" 
-      :value="unreadCount?.unread_count" 
+      v-if="unreadCountValue > 0" 
+      :value="unreadCountValue" 
       :max="99"
       class="cursor-pointer"
       @click="showPanel = !showPanel"
@@ -147,7 +149,7 @@ const { data: notificationData, isLoading } = useQuery({
           size="small" 
           type="primary" 
           :component="RouterLink" 
-          to="{ name: 'notifications' }"
+          :to="{ name: 'notifications' }"
         >
           查看全部通知
         </n-button>

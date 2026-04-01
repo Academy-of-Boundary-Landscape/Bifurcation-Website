@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NCard, NButton, NSpace, NTag, NInput, NTextarea, NSelect, NFormItem, NForm, NIcon } from 'naive-ui'
+import { NCard, NButton, NSpace, NInput, NSelect, NFormItem, NForm, NIcon } from 'naive-ui'
 import { ref, computed, watch } from 'vue'
 import type { StoryNodeCreate } from '@/types/models'
 
@@ -8,7 +8,7 @@ const props = defineProps<{
   mode: 'continue' | 'branch'
 }>()
 
-const emits = defineEmits(['update:modelValue', 'submit'])
+const emits = defineEmits(['update:modelValue', 'submit', 'cancel'])
 
 const formData = ref<StoryNodeCreate>(props.modelValue)
 
@@ -71,20 +71,13 @@ function handleSubmit() {
       
       <!-- 内容 -->
       <n-form-item label="正文内容" required>
-        <n-textarea 
+        <n-input
+          type="textarea"
           v-model:value="formData.content" 
           placeholder="开始您的创作..."
           :rows="12"
           class="w-full"
-        >
-          <template #action>
-            <n-icon>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8 7-8-7v7c0 6 8 10 8 10z"/>
-              </svg>
-            </n-icon>
-          </template>
-        </n-textarea>
+        />
         <div class="flex justify-between mt-2 text-sm text-#666666">
           <span>字数: {{ contentLength }}</span>
           <span v-if="contentLength < 50" class="text-yellow-400">建议至少50字</span>

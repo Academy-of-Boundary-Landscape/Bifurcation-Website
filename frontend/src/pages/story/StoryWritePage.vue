@@ -88,6 +88,10 @@ const { mutate: createNode, isPending: isCreating } = useMutation({
   }
 })
 
+function handleBack() {
+  router.back()
+}
+
 // 离开前检查
 onBeforeUnmount(() => {
   if (contentLength.value > 0) {
@@ -225,7 +229,7 @@ function handleSubmit() {
             </div>
             
             <n-space>
-              <n-button @click="() => router.back()" size="large">
+              <n-button @click="handleBack" size="large">
                 返回
               </n-button>
               <n-button 

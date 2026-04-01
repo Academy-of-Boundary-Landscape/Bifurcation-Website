@@ -2,7 +2,7 @@
 import { NCard, NButton, NSpace, NTag, NSpin } from 'naive-ui'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ref } from 'vue'
-import type { StoryBook } from '@/types/models'
+import type { StoryBook, BookPhase } from '@/types/models'
 import { useQuery, useMutation } from '@tanstack/vue-query'
 import { get, patch } from '@/services/http'
 
@@ -14,14 +14,17 @@ const { data: books, isLoading, refetch } = useQuery<StoryBook[]>({
 
 // 更新故事册状态
 const { mutate: updateBook, isPending: updating } = useMutation({
-  mutationFn: ({ bookId, phase }: { bookId: number; phase: string }) => 
+  mutationFn: ({ bookId, phase }: { bookId: number; phase: BookPhase }) => 
     patch<StoryBook>(`/story/books/${bookId}`, { phase }),
   onSuccess: (_, variables) => {
     // 更新缓存中的对应故事册
     if (books.value) {
       const bookIndex = books.value.findIndex(b => b.id === variables.bookId)
       if (bookIndex !== -1) {
-        books.value[bookIndex].phase = variables.phase as any
+        const book = books.value[bookIndex]
+        if (book) {
+          book.phase = variables.phase
+        }
       }
     }
     refetch()
@@ -30,6 +33,36 @@ const { mutate: updateBook, isPending: updating } = useMutation({
     console.error('更新失败:', error)
   }
 })
+
+function getPhaseType(phase: BookPhase) {
+  switch (phase) {
+    case 'drafting':
+      return 'warning'
+    case 'writing':
+      return 'primary'
+    case 'showcase':
+      return 'success'
+    case 'archived':
+      return 'default'
+  }
+}
+
+function getPhaseLabel(phase: BookPhase) {
+  switch (phase) {
+    case 'drafting':
+      return '草稿阶段'
+    case 'writing':
+      return '写作中'
+    case 'showcase':
+      return '展示中'
+    case 'archived':
+      return '已归档'
+  }
+}
+
+function updateBookPhase(bookId: number, phase: BookPhase) {
+  updateBook({ bookId, phase })
+}
 </script>
 
 <template>
@@ -73,7 +106,7 @@ const { mutate: updateBook, isPending: updating } = useMutation({
                 </div>
                 <div>
                   <h3 class="text-lg font-semibold text-white">{{ book.title }}</h3>
-                  <p class="text-#666666 text-sm">{{ book.description?.substring(0, 50) }}{{ book.description?.length > 50 ? '...' : '' }}</p>
+                  <p class="text-#666666 text-sm">{{ book.description?.substring(0, 50) }}{{ (book.description?.length ?? 0) > 50 ? '...' : '' }}</p>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -112,7 +145,7 @@ const { mutate: updateBook, isPending: updating } = useMutation({
               <n-button 
                 type="primary" 
                 :component="RouterLink" 
-                :to="{ name: 'books', params: { bookId: book.id } }"
+                :to="{ name: 'book-detail', params: { bookId: book.id } }"
               >
                 查看详情
               </n-button>
@@ -120,7 +153,7 @@ const { mutate: updateBook, isPending: updating } = useMutation({
               <n-button 
                 v-if="book.phase !== 'drafting'" 
                 type="default" 
-                @click="() => updateBook({ bookId: book.id, phase: 'drafting' })"
+                @click="updateBookPhase(book.id, 'drafting')"
                 :loading="updating && books.find(b => b.id === book.id)?.id === book.id"
                 :disabled="updating && books.find(b => b.id === book.id)?.id === book.id"
               >
@@ -130,7 +163,7 @@ const { mutate: updateBook, isPending: updating } = useMutation({
               <n-button 
                 v-if="book.phase !== 'writing'" 
                 type="primary" 
-                @click="() => updateBook({ bookId: book.id, phase: 'writing' })"
+                @click="updateBookPhase(book.id, 'writing')"
                 :loading="updating && books.find(b => b.id === book.id)?.id === book.id"
                 :disabled="updating && books.find(b => b.id === book.id)?.id === book.id"
               >
@@ -140,7 +173,7 @@ const { mutate: updateBook, isPending: updating } = useMutation({
               <n-button 
                 v-if="book.phase !== 'showcase'" 
                 type="success" 
-                @click="() => updateBook({ bookId: book.id, phase: 'showcase' })"
+                @click="updateBookPhase(book.id, 'showcase')"
                 :loading="updating && books.find(b => b.id === book.id)?.id === book.id"
                 :disabled="updating && books.find(b => b.id === book.id)?.id === book.id"
               >
@@ -153,28 +186,3 @@ const { mutate: updateBook, isPending: updating } = useMutation({
     </n-spin>
   </div>
 </template>
-
-<script lang="ts">
-export default {
-  methods: {
-    getPhaseType(phase: string) {
-      switch (phase) {
-        case 'drafting': return 'warning'
-        case 'writing': return 'primary'
-        case 'showcase': return 'success'
-        case 'archived': return 'default'
-        default: return 'default'
-      }
-    },
-    getPhaseLabel(phase: string) {
-      switch (phase) {
-        case 'drafting': return '草稿阶段'
-        case 'writing': return '写作中'
-        case 'showcase': return '展示中'
-        case 'archived': return '已归档'
-        default: return '未知'
-      }
-    }
-  }
-}
-</script>

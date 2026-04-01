@@ -62,7 +62,7 @@ const { data: commentCount, isLoading: commentLoading } = useQuery({
             type="primary" 
             size="small" 
             :component="RouterLink" 
-            to="{ name: 'admin-pending' }"
+            :to="{ name: 'admin-pending' }"
           >
             查看列表
           </n-button>
@@ -87,7 +87,7 @@ const { data: commentCount, isLoading: commentLoading } = useQuery({
             type="primary" 
             size="small" 
             :component="RouterLink" 
-            to="{ name: 'books' }"
+            :to="{ name: 'books' }"
           >
             查看详情
           </n-button>
@@ -112,7 +112,7 @@ const { data: commentCount, isLoading: commentLoading } = useQuery({
             type="primary" 
             size="small" 
             :component="RouterLink" 
-            to="{ name: 'admin-books' }"
+            :to="{ name: 'admin-books' }"
           >
             管理故事册
           </n-button>
@@ -137,7 +137,7 @@ const { data: commentCount, isLoading: commentLoading } = useQuery({
             type="primary" 
             size="small" 
             :component="RouterLink" 
-            to="{ name: 'admin-users' }"
+            :to="{ name: 'admin-users' }"
           >
             用户管理
           </n-button>

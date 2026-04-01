@@ -80,6 +80,14 @@ const { mutate: markAllAsRead, isPending: markingAll } = useMutation({
 function setFilter(type: string) {
   filterType.value = type
 }
+
+function handleMarkAsRead(notificationId: number) {
+  markAsRead(notificationId)
+}
+
+function handleMarkAllAsRead() {
+  markAllAsRead()
+}
 </script>
 
 <template>
@@ -151,7 +159,7 @@ function setFilter(type: string) {
             type="primary" 
             size="large" 
             :component="RouterLink" 
-            to="{ name: 'books' }"
+            :to="{ name: 'books' }"
           >
             开始创作
           </n-button>
@@ -199,9 +207,9 @@ function setFilter(type: string) {
                 <n-button 
                   size="small" 
                   type="primary" 
-                  @click="() => markAsRead(notification.id)"
-                  :loading="marking && notifications.find(n => n.id === notification.id)?.id === notification.id"
-                  :disabled="marking && notifications.find(n => n.id === notification.id)?.id === notification.id"
+                  @click="handleMarkAsRead(notification.id)"
+                  :loading="marking && notifications?.find(n => n.id === notification.id)?.id === notification.id"
+                  :disabled="marking && notifications?.find(n => n.id === notification.id)?.id === notification.id"
                 >
                   标记已读
                 </n-button>
@@ -249,7 +257,7 @@ function setFilter(type: string) {
     <div class="mt-8 flex justify-end">
       <n-button 
         type="primary" 
-        @click="markAllAsRead"
+        @click="handleMarkAllAsRead"
         :loading="markingAll"
         :disabled="markingAll"
       >
@@ -258,11 +266,3 @@ function setFilter(type: string) {
     </div>
   </div>
 </template>
-</content>
-<task_progress>
-- [x] 分析 ProfilePage.vue 当前实现
-- [x] 实现 ProfilePage.vue 头像上传功能
-- [x] 实现 NotificationPage.vue 筛选功能
-- [ ] 完善 StoryNodePage.vue 功能
-- [ ] 完善 StoryTreeFlow.vue 功能
-</task_progress>

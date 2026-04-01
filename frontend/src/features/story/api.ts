@@ -8,7 +8,9 @@ import type {
   StoryNodeTreeItem,
   Comment,
   CommentCreate,
-  NodeAuditRequest
+  NodeAuditRequest,
+  UserNodeStatsResponse,
+  UserNotificationsSummary,
 } from '@/types/models'
 
 // 故事册相关 API

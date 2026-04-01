@@ -241,7 +241,12 @@ async def _find_or_create_local_user(db: AsyncSession, claims: dict[str, Any]) -
         email = _pick_claim(claims, "email")
         email_verified = bool(_pick_claim(claims, "email_verified", "emailVerified"))
         if email and email_verified:
-            user = (await db.execute(select(User).where(User.email == str(email).strip().lower()))).scalars().first()
+            matched_users = (
+                await db.execute(select(User).where(User.email == str(email).strip().lower()))
+            ).scalars().all()
+            if len(matched_users) > 1:
+                raise HTTPException(status_code=409, detail="该邮箱对应多个本地账号，不能自动绑定 SSO")
+            user = matched_users[0] if matched_users else None
             if user and user.role == UserRole.ADMIN and user.auth_subject != subject:
                 raise HTTPException(status_code=409, detail="管理员账号不能自动通过邮箱绑定 SSO")
             if user and user.auth_provider and user.auth_subject and user.auth_subject != subject:

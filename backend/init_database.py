@@ -41,6 +41,8 @@ async def create_admin_account():
     admin_auth_provider = os.getenv("ADMIN_AUTH_PROVIDER", "casdoor").strip() or "casdoor"
     admin_auth_subject = os.getenv("ADMIN_AUTH_SUBJECT", "").strip()
     admin_auth_user_id = os.getenv("ADMIN_AUTH_USER_ID", "").strip() or None
+    normalized_email = default_email.strip().lower()
+    normalized_username = default_username.strip()
 
     if not admin_auth_subject:
         raise RuntimeError(
@@ -49,17 +51,29 @@ async def create_admin_account():
         )
 
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(User).where(User.email == default_email))
-        existing = result.scalar_one_or_none()
+        result = await session.execute(
+            select(User).where(
+                User.auth_provider == admin_auth_provider,
+                User.auth_subject == admin_auth_subject,
+            )
+        )
+        existing = result.scalars().first()
         if existing:
-            logger.info(f"管理员账户已存在：{existing.email}，跳过创建。")
+            logger.info("管理员账户已存在：id=%s email=%s，跳过创建。", existing.id, existing.email)
             return
 
+        username_result = await session.execute(select(User).where(User.username == normalized_username))
+        username_owner = username_result.scalars().first()
+        if username_owner:
+            raise RuntimeError(
+                f"ADMIN_USERNAME={normalized_username} 已被现有用户占用，请更换管理员用户名。"
+            )
+
         admin = User(
-            email=default_email.strip().lower(),
-            username=default_username.strip(),
-            display_name=default_username.strip(),
-            avatar=get_gravatar_url(default_email),
+            email=normalized_email,
+            username=normalized_username,
+            display_name=normalized_username,
+            avatar=get_gravatar_url(normalized_email),
             hashed_password="",
             auth_provider=admin_auth_provider,
             auth_subject=admin_auth_subject,

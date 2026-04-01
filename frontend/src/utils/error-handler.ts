@@ -1,6 +1,10 @@
 import { useMessage } from 'naive-ui'
 import type { ApiErrorResponse, ValidationErrorResponse, ErrorResponse } from '@/types/api'
 
+function hasValidationDetails(error: ApiErrorResponse): error is ValidationErrorResponse {
+  return Array.isArray(error.detail)
+}
+
 // 全局错误处理工具
 export function handleError(error: unknown, customMessage?: string): void {
   const message = useMessage()
@@ -22,10 +26,8 @@ export function handleError(error: unknown, customMessage?: string): void {
     const errorResponse = error as ApiErrorResponse
     
     if ('detail' in errorResponse) {
-      if (Array.isArray((errorResponse as any).detail)) {
-        // ValidationErrorResponse
-        const validationError = errorResponse as ValidationErrorResponse
-        const firstError = validationError.detail[0]
+      if (hasValidationDetails(errorResponse)) {
+        const firstError = errorResponse.detail[0]
         if (firstError) {
           message.error(customMessage || `验证错误: ${firstError.msg}`)
         } else {
