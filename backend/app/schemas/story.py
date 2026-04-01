@@ -75,11 +75,12 @@ class StoryNodeRead(StoryNodeListItem):
     content: str
     reject_reason: Optional[str] = None
     archived_reason: Optional[str] = None
+    reviewed_by: Optional[int] = None
     reviewed_at: Optional[datetime] = None
 
 
 class StoryNodeTreeItem(StoryNodeListItem):
-    """专门用于 /tree，包含 children（递归）。"""
+    """专门用于 /tree，保留树展示必需字段，不返回正文。"""
     children: List["StoryNodeTreeItem"] = Field(default_factory=list)
 
 

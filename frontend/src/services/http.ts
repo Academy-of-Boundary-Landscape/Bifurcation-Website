@@ -4,7 +4,7 @@ import { useMessage } from 'naive-ui'
 
 // 创建 axios 实例
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8057/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',

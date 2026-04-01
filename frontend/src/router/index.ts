@@ -49,6 +49,12 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      path: '/auth/callback',
+      name: 'auth-callback',
+      component: () => import('@/pages/auth/AuthCallbackPage.vue'),
+      meta: { guestOnly: true },
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: () => import('@/pages/user/ProfilePage.vue'),
@@ -76,6 +82,12 @@ const router = createRouter({
       path: '/admin/books',
       name: 'admin-books',
       component: () => import('@/pages/admin/AdminBooksPage.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/users',
+      name: 'admin-users',
+      component: () => import('@/pages/admin/AdminUsersPage.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
     },
     {

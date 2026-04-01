@@ -26,7 +26,7 @@ router = APIRouter()
 
 @router.get(
     "/nodes/pending",
-    response_model=List[node_schema.StoryNodeTreeItem],
+    response_model=List[node_schema.StoryNodeRead],
     summary="[Admin] 获取待审核节点列表",
     responses={
         200: {"description": "获取成功"},
@@ -58,7 +58,7 @@ async def get_pending_nodes(
 
 @router.patch(
     "/nodes/{node_id}/audit",
-    response_model=node_schema.StoryNodeTreeItem,
+    response_model=node_schema.StoryNodeRead,
     summary="[Admin] 审核/强制修改节点状态",
     responses={
         200: {"description": "操作成功"},
@@ -78,6 +78,8 @@ async def audit_node(
     node = await db.get(StoryNode, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="节点不存在")
+    if audit_in.status == NodeStatus.PENDING:
+        raise HTTPException(status_code=400, detail="审核接口不支持将节点设为 pending")
 
     old_status = node.status
     now = datetime.now(timezone.utc)
@@ -91,10 +93,15 @@ async def audit_node(
     if audit_in.status == NodeStatus.PUBLISHED:
         node.published_at = now
         node.visibility = NodeVisibility.PUBLIC
+        node.archived_at = None
+        node.archived_reason = None
+        node.reject_reason = None
         notification_type = NotificationType.APPROVED
         notification_message = None
     elif audit_in.status == NodeStatus.ARCHIVED:
+        node.visibility = NodeVisibility.PRIVATE
         node.archived_at = now
+        node.reject_reason = audit_in.reject_reason
         node.archived_reason = audit_in.reject_reason or "管理员归档"
         notification_type = NotificationType.REJECTED
         notification_message = audit_in.reject_reason
@@ -237,7 +244,7 @@ async def admin_dashboard_stats(
     seven_days_ago = now - timedelta(days=7)
 
     users_total = (await db.execute(select(func.count(User.id)))).scalar() or 0
-    users_active = (await db.execute(select(func.count(User.id)).where(User.is_active == True))).scalar() or 0
+    users_active = (await db.execute(select(func.count(User.id)).where(User.is_active.is_(True)))).scalar() or 0
 
     nodes_total = (await db.execute(select(func.count(StoryNode.id)))).scalar() or 0
     nodes_pending = (

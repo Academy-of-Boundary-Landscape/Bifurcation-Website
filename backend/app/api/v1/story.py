@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import desc, select, text, or_, update
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from sqlalchemy import desc, select, text, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, defer, raiseload
 
@@ -128,7 +128,7 @@ async def create_book(
 )
 async def update_book(
     book_id: int = Path(..., ge=1),
-    book_in: book_schema.StoryBookUpdate = Depends(),
+    book_in: book_schema.StoryBookUpdate = Body(...),
     current_user: User = Depends(deps.get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -366,6 +366,8 @@ async def create_story_node(
             raise HTTPException(status_code=400, detail="父节点不属于同一活动")
 
         if not is_admin:
+            if parent_node.freeze_interactions:
+                raise HTTPException(status_code=400, detail="该节点已冻结互动，暂不可继续续写")
             if parent_node.is_ending:
                 raise HTTPException(status_code=400, detail="该分支已完结")
             if parent_node.status != NodeStatus.PUBLISHED:
@@ -402,6 +404,10 @@ async def create_story_node(
         # 根节点：root_id = 自身 id
         if node_in.parent_id is None:
             new_node.root_id = new_node.id
+        elif parent_node is not None:
+            if parent_node.children_count is None:
+                parent_node.children_count = 0
+            parent_node.children_count += 1
 
         await db.commit()
         await db.refresh(new_node)
@@ -515,7 +521,7 @@ async def read_user_nodes(
 )
 async def update_story_node(
     node_id: int = Path(..., ge=1),
-    node_in: node_schema.NodeUpdate = Depends(),
+    node_in: node_schema.NodeUpdate = Body(...),
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -527,6 +533,17 @@ async def update_story_node(
         raise HTTPException(status_code=403, detail="无权修改")
 
     update_data = node_in.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="没有可更新的字段")
+
+    if current_user.role != UserRole.ADMIN and node.status == NodeStatus.ARCHIVED:
+        raise HTTPException(status_code=400, detail="归档节点不可修改")
+
+    if current_user.role != UserRole.ADMIN and node.status == NodeStatus.PUBLISHED:
+        protected_fields = {"content", "title", "branch_name", "summary"}
+        if protected_fields.intersection(update_data):
+            raise HTTPException(status_code=400, detail="已发布节点暂不允许普通用户直接修改")
+
     for field, value in update_data.items():
         setattr(node, field, value)
 
@@ -596,13 +613,15 @@ async def delete_story_node(
         node.archived_reason = "用户主动删除"
         db.add(node)
         
-        # 🔧 修复问题 5: 更新父节点的 children_count
+        # 删除节点时同步回收父节点 children_count，避免负值
         if node.parent_id is not None:
-            await db.execute(
-                update(StoryNode)
-                .where(StoryNode.id == node.parent_id)
-                .values(children_count=StoryNode.children_count - 1)
-            )
+            parent_node = await db.get(StoryNode, node.parent_id)
+            if parent_node:
+                if parent_node.children_count is None:
+                    parent_node.children_count = 0
+                elif parent_node.children_count > 0:
+                    parent_node.children_count -= 1
+                db.add(parent_node)
         
         await db.commit()
     except Exception as e:

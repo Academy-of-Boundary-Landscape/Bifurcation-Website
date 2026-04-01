@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from app.api import deps
 from app.core.database import get_db
 from app.models.user import User
-from app.models.story import StoryNode, NodeLike
+from app.models.story import StoryNode, NodeLike, NodeStatus
 from app.schemas import user as user_schema
 from app.schemas import common as common_schema
 
@@ -40,6 +40,7 @@ async def read_user_profile(
     nodes_count_stmt = (
         select(func.count(StoryNode.id))
         .where(StoryNode.author_id == user.id)
+        .where(StoryNode.status == NodeStatus.PUBLISHED)
     )
     nodes_count = (await db.execute(nodes_count_stmt)).scalar() or 0
 
@@ -49,6 +50,7 @@ async def read_user_profile(
         .select_from(NodeLike)
         .join(StoryNode, NodeLike.node_id == StoryNode.id)
         .where(StoryNode.author_id == user.id)
+        .where(StoryNode.status == NodeStatus.PUBLISHED)
     )
     total_likes = (await db.execute(total_likes_stmt)).scalar() or 0
 

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from sqlalchemy import (
-    String, Boolean, DateTime, Enum as SAEnum, Integer, CheckConstraint, Index
+    String, Boolean, DateTime, Enum as SAEnum, Integer, CheckConstraint, Index, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -43,8 +43,14 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
-    # 密码（如果你确定永远账号密码：nullable=False OK）
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 本地密码在接入 SSO 后可以为空
+    hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # SSO 身份映射
+    auth_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    auth_subject: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    auth_user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    auth_last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     # 封禁（从 role 拆出，便于细粒度控制）
     banned_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
@@ -100,6 +106,7 @@ class User(Base):
         CheckConstraint("length(username) >= 3", name="ck_users_username_len"),
         # 常用查询：活跃且未封禁用户（后台管理）
         Index("ix_users_active_role", "is_active", "role"),
+        UniqueConstraint("auth_provider", "auth_subject", name="uq_users_auth_provider_subject"),
     )
 
     def is_banned(self, now: Optional[datetime] = None) -> bool:

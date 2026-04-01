@@ -1,11 +1,11 @@
 from __future__ import annotations
 import enum
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
     Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, Integer,
-    String, Text
+    String, Text, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 from sqlalchemy.sql import func
@@ -148,6 +148,16 @@ class StoryNode(Base):
         cascade="save-update, merge",
         passive_deletes=False,
     )
+    likes = relationship(
+        "NodeLike",
+        back_populates="node",
+        cascade="save-update, merge",
+    )
+    comments = relationship(
+        "StoryComment",
+        back_populates="node",
+        cascade="save-update, merge",
+    )
 
     __table_args__ = (
         # 常用：某节点下公开子节点
@@ -158,4 +168,34 @@ class StoryNode(Base):
         Index("ix_nodes_book_hot", "book_id", "status", "visibility", "likes_count"),
         # 常用：树内聚合/热榜
         Index("ix_nodes_root_hot", "root_id", "status", "visibility", "likes_count"),
+    )
+
+
+class NodeLike(Base):
+    __tablename__ = "node_likes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    node_id: Mapped[int] = mapped_column(
+        ForeignKey("story_nodes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )
+
+    user = relationship("User", back_populates="likes")
+    node = relationship("StoryNode", back_populates="likes")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "node_id", name="uq_node_likes_user_node"),
+        Index("ix_node_likes_node_created", "node_id", "created_at"),
     )

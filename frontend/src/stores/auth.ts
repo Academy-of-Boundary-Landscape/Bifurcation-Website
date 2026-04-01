@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '@/types/models'
-import type { TokenResponse } from '@/types/api'
+import type { SsoExchangeResponse, SsoLoginUrlResponse, TokenResponse } from '@/types/api'
 import { post, get, patch } from '@/services/http'
 
 const TOKEN_KEY = 'auth_access_token'
 const USER_KEY = 'auth_user'
+const SSO_STATE_KEY = 'auth_sso_state'
 
 export const useAuthStore = defineStore('auth', () => {
   // 状态
@@ -19,20 +20,25 @@ export const useAuthStore = defineStore('auth', () => {
   const isWriter = computed(() => currentUser.value?.role === 'writer')
   const isBanned = computed(() => currentUser.value?.role === 'banned')
 
-  // 方法 - 登录
+  function saveSession(token: string) {
+    accessToken.value = token
+    localStorage.setItem(TOKEN_KEY, token)
+  }
+
+// 方法 - 登录
   async function login(emailOrUsername: string, password: string) {
-    const formData = new FormData()
+    const formData = new URLSearchParams()
     formData.append('username', emailOrUsername)
     formData.append('password', password)
+    formData.append('grant_type', 'password')
     
-    const response = await post<TokenResponse>('/auth/login', formData, {
+    const response = await post<TokenResponse>('/api/v1/auth/login', formData, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     })
     
-    accessToken.value = response.access_token
-    localStorage.setItem(TOKEN_KEY, response.access_token)
+    saveSession(response.access_token)
     
     // 获取用户信息
     await fetchCurrentUser()
@@ -40,10 +46,38 @@ export const useAuthStore = defineStore('auth', () => {
     return response
   }
 
+  async function getSsoLoginUrl(redirectTo?: string) {
+    const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : ''
+    const response = await get<SsoLoginUrlResponse>(`/api/v1/auth/sso/login-url${query}`)
+    sessionStorage.setItem(SSO_STATE_KEY, response.state)
+    return response
+  }
+
+  async function beginSsoLogin(redirectTo?: string) {
+    const response = await getSsoLoginUrl(redirectTo)
+    window.location.href = response.authorize_url
+  }
+
+  async function exchangeSsoCode(code: string, state: string) {
+    const expectedState = sessionStorage.getItem(SSO_STATE_KEY)
+    if (!expectedState || expectedState !== state) {
+      throw new Error('SSO 状态校验失败，请重新登录')
+    }
+
+    const response = await post<SsoExchangeResponse>('/api/v1/auth/sso/exchange', {
+      code,
+      state,
+    })
+    sessionStorage.removeItem(SSO_STATE_KEY)
+    saveSession(response.access_token)
+    await fetchCurrentUser()
+    return response
+  }
+
   // 方法 - 获取当前用户信息
   async function fetchCurrentUser() {
     try {
-      const user = await get<User>('/auth/me')
+      const user = await get<User>('/api/v1/auth/me')
       currentUser.value = user
       localStorage.setItem(USER_KEY, JSON.stringify(user))
       return user
@@ -60,11 +94,12 @@ export const useAuthStore = defineStore('auth', () => {
     currentUser.value = null
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
+    sessionStorage.removeItem(SSO_STATE_KEY)
   }
 
   // 方法 - 注册
   async function register(email: string, username: string, password: string) {
-    await post('/auth/register', {
+    await post('/api/v1/auth/register', {
       email,
       username,
       password,
@@ -73,17 +108,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 方法 - 发送验证码
   async function sendCode(email: string) {
-    await post('/auth/send-code-for-activation', { email })
+    await post('/api/v1/auth/send-code-for-activation', { email })
   }
 
   // 方法 - 验证邮箱
   async function verifyEmail(email: string, code: string) {
-    await post('/auth/verify-email-for-activation', { email, code })
+    await post('/api/v1/auth/verify-email-for-activation', { email, code })
   }
 
   // 方法 - 更新用户资料
   async function updateProfile(data: { username?: string; bio?: string; avatar?: string }) {
-    const user = await patch<User>('/auth/me', data)
+    const user = await patch<User>('/api/v1/auth/me', data)
     currentUser.value = user
     localStorage.setItem(USER_KEY, JSON.stringify(user))
     return user
@@ -100,6 +135,9 @@ export const useAuthStore = defineStore('auth', () => {
     isBanned,
     // 方法
     login,
+    getSsoLoginUrl,
+    beginSsoLogin,
+    exchangeSsoCode,
     logout,
     fetchCurrentUser,
     register,

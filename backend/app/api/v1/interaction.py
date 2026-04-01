@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api import deps
 from app.core.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.story import StoryNode, NodeLike
 from app.models.interaction import StoryComment, Notification, NotificationType
 from app.schemas import interaction as interact_schema
@@ -44,6 +44,8 @@ async def toggle_node_like(
     node = await db.get(StoryNode, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="节点不存在")
+    if node.freeze_interactions:
+        raise HTTPException(status_code=400, detail="该节点已冻结互动")
 
     # 防御 likes_count 为空的情况
     if node.likes_count is None:
@@ -142,6 +144,8 @@ async def create_node_comment(
     node = await db.get(StoryNode, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="节点不存在")
+    if node.freeze_interactions:
+        raise HTTPException(status_code=400, detail="该节点已冻结互动")
 
     if not comment_in.content or not comment_in.content.strip():
         raise HTTPException(status_code=400, detail="评论内容不能为空")
@@ -236,7 +240,7 @@ async def get_unread_notifications_count(
         await db.execute(
             select(func.count(Notification.id))
             .where(Notification.user_id == current_user.id)
-            .where(Notification.is_read == False)
+            .where(Notification.is_read.is_(False))
         )
     ).scalar() or 0
     return {"unread_count": unread_count}
@@ -288,7 +292,7 @@ async def mark_notifications_read(
     stmt = (
         update(Notification)
         .where(Notification.user_id == current_user.id)
-        .where(Notification.is_read == False)
+        .where(Notification.is_read.is_(False))
         .values(is_read=True, read_at=datetime.now(timezone.utc))
     )
     await db.execute(stmt)

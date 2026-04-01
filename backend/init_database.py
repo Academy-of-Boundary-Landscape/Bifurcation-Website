@@ -15,7 +15,7 @@ from app.models.user import User, UserRole
 from app.models.story_book import StoryBook
 from app.models.story import StoryNode, NodeLike
 from app.models.interaction import StoryComment, Notification
-from app.core.security import get_password_hash
+from app.utils.avatar import get_gravatar_url
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -35,14 +35,20 @@ async def init_models():
 
 
 async def create_admin_account():
-    """创建一个默认管理员账号（如已存在则跳过）。"""
-    # 可以通过环境变量覆盖默认账号信息
+    """创建一个默认管理员账号（绑定 SSO subject）。"""
     default_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
     default_username = os.getenv("ADMIN_USERNAME", "admin")
-    default_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    admin_auth_provider = os.getenv("ADMIN_AUTH_PROVIDER", "casdoor").strip() or "casdoor"
+    admin_auth_subject = os.getenv("ADMIN_AUTH_SUBJECT", "").strip()
+    admin_auth_user_id = os.getenv("ADMIN_AUTH_USER_ID", "").strip() or None
+
+    if not admin_auth_subject:
+        raise RuntimeError(
+            "缺少 ADMIN_AUTH_SUBJECT。当前初始化脚本会直接创建绑定 SSO 的管理员账号，"
+            "请先在 .env 中配置管理员对应的 Casdoor subject。"
+        )
 
     async with AsyncSessionLocal() as session:
-        # 检查是否已存在该邮箱的用户
         result = await session.execute(select(User).where(User.email == default_email))
         existing = result.scalar_one_or_none()
         if existing:
@@ -50,9 +56,14 @@ async def create_admin_account():
             return
 
         admin = User(
-            email=default_email,
-            username=default_username,
-            hashed_password=get_password_hash(default_password),
+            email=default_email.strip().lower(),
+            username=default_username.strip(),
+            display_name=default_username.strip(),
+            avatar=get_gravatar_url(default_email),
+            hashed_password="",
+            auth_provider=admin_auth_provider,
+            auth_subject=admin_auth_subject,
+            auth_user_id=admin_auth_user_id,
             role=UserRole.ADMIN,
             is_active=True,
             is_verified=True,
@@ -60,10 +71,11 @@ async def create_admin_account():
         session.add(admin)
         await session.commit()
         logger.info(
-            "默认管理员账户已创建：email=%s username=%s password=%s",
+            "默认管理员账户已创建：email=%s username=%s auth_provider=%s auth_subject=%s",
             default_email,
             default_username,
-            default_password,
+            admin_auth_provider,
+            admin_auth_subject,
         )
 
 
