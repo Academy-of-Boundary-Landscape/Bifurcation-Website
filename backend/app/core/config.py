@@ -10,7 +10,10 @@ def _resolve_database_url() -> str:
     app_env = os.getenv("APP_ENV", "dev").lower()
     if app_env == "dev":
         return os.getenv("DEV_DATABASE_URL", "sqlite+aiosqlite:///./dev.db")
-    return os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:password@localhost:5432/tree_story_db")
+    url = os.getenv("DATABASE_URL", "")
+    if not url:
+        raise RuntimeError("生产环境必须在 .env 中设置 DATABASE_URL")
+    return url
 
 
 def _resolve_cors_origins() -> list[str]:
@@ -33,21 +36,21 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "Tree Story Project"
     API_V1_STR: str = "/api/v1"
-    
+
     # 开发环境 (APP_ENV=dev): sqlite+aiosqlite:///./dev.db
     # 生产环境 (APP_ENV=prod): postgresql+asyncpg://user:password@host:port/db_name
     DATABASE_URL: str = _resolve_database_url()
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "GANGWAY")  # 请在生产环境中使用更安全的密钥
+
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 天过期
     SQL_ECHO: bool = os.getenv("SQL_ECHO", "false").lower() in {"1", "true", "yes", "on"}
 
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "admin@example.com")
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
-    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123")
 
     # Casdoor / SSO 配置
-    CASDOOR_BASE_URL: str = os.getenv("CASDOOR_BASE_URL", "https://auth.secret-sealing.club")
+    CASDOOR_BASE_URL: str = os.getenv("CASDOOR_BASE_URL", "")
     CASDOOR_CLIENT_ID: str = os.getenv("CASDOOR_CLIENT_ID", "")
     CASDOOR_CLIENT_SECRET: str = os.getenv("CASDOOR_CLIENT_SECRET", "")
     CASDOOR_ORGANIZATION_NAME: str = os.getenv("CASDOOR_ORGANIZATION_NAME", "")
@@ -129,3 +132,14 @@ class Settings(BaseSettings):
         return {item.strip().lower() for item in self.SSO_ADMIN_MATCH_VALUES.split(",") if item.strip()}
 
 settings = Settings()
+
+# 启动时强制检查生产环境必填项，防止使用空/默认值上线
+if os.getenv("APP_ENV", "dev").lower() == "prod":
+    _missing = [name for name, val in [
+        ("SECRET_KEY", settings.SECRET_KEY),
+        ("CASDOOR_CLIENT_ID", settings.CASDOOR_CLIENT_ID),
+        ("CASDOOR_CLIENT_SECRET", settings.CASDOOR_CLIENT_SECRET),
+        ("CASDOOR_REDIRECT_URI", settings.CASDOOR_REDIRECT_URI),
+    ] if not val]
+    if _missing:
+        raise RuntimeError(f"生产环境缺少必填配置项: {', '.join(_missing)}")
