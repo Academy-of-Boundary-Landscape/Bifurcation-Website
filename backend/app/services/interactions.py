@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.interaction import NotificationType, StoryComment
+
+logger = logging.getLogger(__name__)
 from app.models.story import NodeLike, StoryNode
 from app.models.user import User
 from app.schemas import interaction as interact_schema
@@ -42,6 +46,7 @@ async def toggle_story_node_like(
         db.add(NodeLike(user_id=current_user.id, node_id=node_id))
         node.likes_count += 1
         action = "liked"
+        logger.info("点赞通知: node=%d sender=%d receiver=%d", node.id, current_user.id, node.author_id)
         await send_notification(
             db=db,
             receiver_id=node.author_id,
@@ -86,6 +91,7 @@ async def create_story_comment(
         node.comments_count = 0
     node.comments_count += 1
 
+    logger.info("评论通知: node=%d sender=%d receiver=%d", node.id, current_user.id, node.author_id)
     await send_notification(
         db=db,
         receiver_id=node.author_id,

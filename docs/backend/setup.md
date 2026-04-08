@@ -94,7 +94,7 @@ SQL_ECHO=true
 CASDOOR_REDIRECT_URI=https://你的前端域名/auth/callback
 ```
 
-具体配置方法和 Casdoor / 上游 Provider callback 的区别，见 `docs/casdoor-callback-setup.md`。
+具体配置方法和 Casdoor / 上游 Provider callback 的区别，见 [`casdoor-callback.md`](casdoor-callback.md)。
 
 说明：
 
@@ -189,3 +189,59 @@ ADMIN_AUTH_USER_ID=
 - 对外认证入口已经收敛为 SSO，不再提供本地密码 API
 - 初始化脚本默认不会强制创建管理员账号；管理员通常来自 Casdoor 登录时的 claim 同步
 - `docs/` 才是当前有效文档来源，`backend` 目录内旧文档已清理
+
+## 8. 测试环境启动（端口 8401 / 5174）
+
+测试环境与开发环境使用不同端口以便同时运行，互不干扰。
+
+目标地址：
+
+- 前端：`http://127.0.0.1:5174`
+- 后端健康检查：`http://127.0.0.1:8401/health`
+- 前端代理：`http://127.0.0.1:5174/api/v1/*` → `http://127.0.0.1:8401/api/v1/*`
+
+### 测试后端
+
+`.env` 关键项（`CASDOOR_REDIRECT_URI` 指向测试前端端口）：
+
+```env
+APP_ENV=dev
+DEV_DATABASE_URL=sqlite+aiosqlite:///./dev.db
+SECRET_KEY=replace-with-a-long-random-secret
+CORS_ORIGINS=http://127.0.0.1:5174,http://localhost:5174
+CASDOOR_REDIRECT_URI=http://127.0.0.1:5174/auth/callback
+```
+
+```bash
+cd backend
+source venv/bin/activate
+python init_database.py         # 仅首次
+BACKEND_PORT=8401 python main.py
+```
+
+### 测试前端
+
+Vite 在 `VITE_PORT=5174` 时自动将代理目标推断为 `8401`：
+
+```bash
+cd frontend
+VITE_PORT=5174 npm run dev
+```
+
+### Casdoor 侧配置
+
+Casdoor Application 的 `Redirect URL` 必须和后端 `.env` 中的 `CASDOOR_REDIRECT_URI` 完全一致：
+
+```
+http://127.0.0.1:5174/auth/callback
+```
+
+`127.0.0.1` 和 `localhost` 不可混用，`CORS_ORIGINS` 也需保持一致。
+
+### 推荐测试路径
+
+1. 访问 `http://127.0.0.1:5174/books`
+2. 进入一本书，点击树节点
+3. 从节点页发起续写，完成 Casdoor 登录
+4. 提交节点，确认显示"待审核"
+5. 管理员登录后台审核，审核通过后确认节点可见

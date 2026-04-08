@@ -8,7 +8,7 @@ import type { Notification } from '@/types/models'
 import {
   useMarkAllNotificationsAsReadMutation,
   useMarkNotificationAsReadMutation,
-  useNotificationsQuery,
+  useInfiniteNotificationsQuery,
   useUnreadCountQuery,
 } from '@/features/interaction/queries'
 
@@ -19,7 +19,13 @@ const router = useRouter()
 const filterType = ref<NotificationFilter>('all')
 const markingNotificationId = ref<number | null>(null)
 
-const { data: notifications, isLoading } = useNotificationsQuery()
+const {
+  data: notificationPages,
+  isLoading,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+} = useInfiniteNotificationsQuery()
 const { data: unreadCount } = useUnreadCountQuery()
 const { mutate: markAsRead, isPending: marking } = useMarkNotificationAsReadMutation()
 const { mutate: markAllAsRead, isPending: markingAll } = useMarkAllNotificationsAsReadMutation()
@@ -33,14 +39,15 @@ const filterOptions: Array<{ value: NotificationFilter; label: string }> = [
   { value: 'rejected', label: '审核驳回' },
 ]
 
+const allNotifications = computed(() => notificationPages.value?.pages.flat() ?? [])
+
 const filteredNotifications = computed(() => {
-  if (!notifications.value) return []
-  if (filterType.value === 'all') return notifications.value
-  return notifications.value.filter((notification) => notification.type === filterType.value)
+  if (filterType.value === 'all') return allNotifications.value
+  return allNotifications.value.filter((n) => n.type === filterType.value)
 })
 
 const unreadCountValue = computed(() => unreadCount.value?.unread_count ?? 0)
-const totalCount = computed(() => notifications.value?.length ?? 0)
+const totalCount = computed(() => allNotifications.value.length)
 
 function setFilter(type: NotificationFilter) {
   filterType.value = type
@@ -266,7 +273,7 @@ function openNotificationNode(nodeId: number) {
                   v-if="notification.node_id"
                   type="primary"
                   size="small"
-                  @click="openNotificationNode(notification.node_id)"
+                  @click="openNotificationNode(notification.node_id!)"
                 >
                   查看节点
                 </n-button>
@@ -282,6 +289,19 @@ function openNotificationNode(nodeId: number) {
               </p>
             </div>
           </article>
+
+          <div v-if="hasNextPage" class="notification-load-more">
+            <n-button
+              :loading="isFetchingNextPage"
+              :disabled="isFetchingNextPage"
+              @click="fetchNextPage()"
+            >
+              加载更多
+            </n-button>
+          </div>
+          <p v-else-if="allNotifications.length > 0" class="notification-end-hint">
+            已显示全部通知
+          </p>
         </div>
       </n-spin>
     </section>
@@ -398,6 +418,22 @@ function openNotificationNode(nodeId: number) {
   margin: 0;
   color: var(--text-secondary);
   line-height: 1.75;
+}
+
+.notification-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.notification-end-hint {
+  margin: 0;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 0;
 }
 
 .notification-empty {

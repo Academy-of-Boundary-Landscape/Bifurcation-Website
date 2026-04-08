@@ -33,8 +33,8 @@ export async function fetchNotifications(params?: { skip?: number; limit?: numbe
   const queryParams = new URLSearchParams()
   if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString())
   if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
-  
-  return get<Notification[]>(`/interaction/notifications?${queryParams}`)
+  const qs = queryParams.toString()
+  return get<Notification[]>(`/interaction/notifications${qs ? `?${qs}` : ''}`)
 }
 
 export async function markAllNotificationsAsRead() {

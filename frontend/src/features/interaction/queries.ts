@@ -1,5 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import type {
   CommentCreate,
 } from '@/types/models'
@@ -68,18 +69,28 @@ export function useDeleteCommentMutation() {
   })
 }
 
+const NOTIFICATIONS_PAGE_SIZE = 20
+
 // 通知相关 Queries
-export function useNotificationsQuery(params?: { skip?: number; limit?: number }) {
-  return useQuery({
-    queryKey: queryKeys.notifications(params),
-    queryFn: () => fetchNotifications(params),
+export function useInfiniteNotificationsQuery() {
+  return useInfiniteQuery({
+    queryKey: queryKeys.notificationsRoot(),
+    queryFn: ({ pageParam }) => fetchNotifications({ skip: pageParam as number, limit: NOTIFICATIONS_PAGE_SIZE }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < NOTIFICATIONS_PAGE_SIZE) return undefined
+      return allPages.length * NOTIFICATIONS_PAGE_SIZE
+    },
   })
 }
 
 export function useUnreadCountQuery() {
+  const authStore = useAuthStore()
   return useQuery({
     queryKey: queryKeys.unreadCount(),
     queryFn: () => fetchUnreadCount(),
+    enabled: computed(() => authStore.isAuthenticated),
+    refetchInterval: 60_000,
   })
 }
 

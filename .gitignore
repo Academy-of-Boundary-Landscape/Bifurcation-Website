@@ -94,6 +94,11 @@ __screenshots__/
 backend/static/uploads/*/*
 !backend/static/uploads/.gitkeep
 
+# Database files (dev/test only)
+*.db
+*.sqlite
+*.sqlite3
+
 # Temporary files
 *.tmp
 *.temp

@@ -89,7 +89,7 @@ function convertToFlowData(items: StoryNodeTreeItem[]): { nodes: FlowStoryNode[]
     let y = cursorY
 
     if (children.length === 1) {
-      const child = children[0]
+      const child = children[0]!
       const childStartY = cursorY + SINGLE_CHILD_OFFSET
       const nextChildY = placeNode(child, level + 1, nodeId, childStartY)
       y = cursorY

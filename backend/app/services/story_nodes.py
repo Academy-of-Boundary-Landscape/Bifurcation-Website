@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -14,6 +15,8 @@ from app.models.story_book import BookPhase, StoryBook
 from app.models.user import User, UserRole
 from app.schemas import story as node_schema
 from app.utils.notification import send_notification
+
+logger = logging.getLogger(__name__)
 
 
 async def create_story_node_record(
@@ -105,7 +108,8 @@ async def create_story_node_record(
                 book_id=parent_node.book_id,
             )
             await db.commit()
-        except Exception:
+        except Exception as e:
+            logger.warning("发送 BRANCHED 通知失败，节点创建不受影响: %s", e)
             await db.rollback()
 
     return node_with_author
@@ -149,6 +153,10 @@ async def audit_story_node_record(
         notification_message = audit_in.reject_reason
 
     if old_status != audit_in.status and notification_type:
+        logger.info(
+            "审核通知: node=%d type=%s reviewer=%d author=%d",
+            node.id, notification_type.value, current_user.id, node.author_id,
+        )
         await send_notification(
             db=db,
             receiver_id=node.author_id,
