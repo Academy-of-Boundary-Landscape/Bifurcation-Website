@@ -67,8 +67,10 @@
 | GET | `/api/v1/story/books` | 否 | 获取活动列表 |
 | GET | `/api/v1/story/books/{book_id}` | 否 | 获取活动详情 |
 | GET | `/api/v1/story/tree` | 可选 | 获取故事树 |
+| GET | `/api/v1/story/node/{node_id}/lineage` | 可选 | 获取从根到当前节点的完整阅读链 |
 | GET | `/api/v1/story/node/{node_id}/path` | 可选 | 获取节点阅读路径 |
 | POST | `/api/v1/story/node` | 登录 | 提交新节点 |
+| GET | `/api/v1/story/node?parent_id=...` | 可选 | 获取某个节点的直接子分支 |
 | GET | `/api/v1/story/node/{node_id}` | 可选 | 获取节点详情 |
 | GET | `/api/v1/story/user/{user_id}/nodes` | 可选 | 获取用户创作列表 |
 | PATCH | `/api/v1/story/node/{node_id}` | 登录 | 编辑节点 |
@@ -105,11 +107,12 @@
 
 | 方法 | 路径 | 认证 | 说明 |
 | --- | --- | --- | --- |
+| GET | `/api/v1/admin/nodes` | 管理员 | 节点管理列表，支持按状态/作者/故事册/关键词筛选 |
 | GET | `/api/v1/admin/nodes/pending` | 管理员 | 待审核节点列表 |
 | PATCH | `/api/v1/admin/nodes/{node_id}/audit` | 管理员 | 审核节点 |
 | PATCH | `/api/v1/admin/users/{user_id}` | 管理员 | 更新用户状态/角色 |
 | GET | `/api/v1/admin/users` | 管理员 | 用户列表 |
-| GET | `/api/v1/admin/stats` | 管理员 | 仪表盘统计 |
+| GET | `/api/v1/admin/stats` | 管理员 | 仪表盘统计，返回 `users` 与 `nodes` 两组聚合数据 |
 
 ## 4.8 Uploads
 
@@ -165,6 +168,51 @@
 - 如允许自动绑邮箱，且邮箱已验证，则会尝试绑定旧账号；若同邮箱命中多个本地账号，则返回冲突而不自动绑定
 - 最终返回的是本站自己的 token，不是 Casdoor token
 
+## 5.3 故事读取边界
+
+故事接口当前明确分为两类返回模型：
+
+- 轻量列表模型 `StoryNodeListItem`
+  - 用于 `/tree`、`/node?parent_id=...`、`/user/{user_id}/nodes`
+  - 不返回正文 `content`
+- 深读模型 `StoryNodeRead`
+  - 用于 `/node/{node_id}`、`/node/{node_id}/path`、`/node/{node_id}/lineage`
+  - 返回正文和审核相关字段
+
+这样做是为了避免树视图、发现流和用户主页一次性拉回大量正文内容。
+
+## 5.4 用户创作列表可见性
+
+`GET /api/v1/story/user/{user_id}/nodes` 的可见性规则如下：
+
+- 管理员：可查看该用户全部节点，可按 `status` 过滤
+- 用户本人：可查看自己的全部节点，可按 `status` 过滤
+- 其他访客：只能看到 `published` 节点
+
+## 5.5 管理员统计返回结构
+
+`GET /api/v1/admin/stats` 当前返回结构是：
+
+```json
+{
+  "users": {
+    "total": 0,
+    "active": 0,
+    "inactive": 0,
+    "new_7d": 0
+  },
+  "nodes": {
+    "total": 0,
+    "pending": 0,
+    "published": 0,
+    "archived": 0,
+    "new_7d": 0
+  }
+}
+```
+
+前端管理后台应直接复用这个聚合接口，而不是假设还有额外的分散 count 接口。
+
 ## 6. 已移除的旧认证接口
 
 以下接口已经不再保留：
@@ -182,4 +230,5 @@
 本文档只描述当前对外可用的 API 结构，不展开所有 schema 字段和业务限制。具体规则请继续看：
 
 - `backend-features.md`
+- `backend-gap-review.md`
 - `casdoor-sso-migration-plan.md`

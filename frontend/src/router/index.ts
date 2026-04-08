@@ -73,10 +73,14 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
-      path: '/admin/pending',
-      name: 'admin-pending',
+      path: '/admin/nodes',
+      name: 'admin-nodes',
       component: () => import('@/pages/admin/AdminPendingNodesPage.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/pending',
+      redirect: { name: 'admin-nodes' },
     },
     {
       path: '/admin/books',

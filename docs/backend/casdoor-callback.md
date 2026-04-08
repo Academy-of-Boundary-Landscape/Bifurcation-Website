@@ -7,7 +7,7 @@
 - Casdoor 应用里的 `Redirect URL`
   - 填你网站前端的回调页
   - 生产环境示例：`https://你的前端域名/auth/callback`
-  - 本地开发示例：`http://localhost:5173/auth/callback`
+  - 本地测试示例：`http://127.0.0.1:5174/auth/callback`
 - 后端 `.env` 里的 `CASDOOR_REDIRECT_URI`
   - 必须和上面这个 URL 完全一致
 
@@ -49,7 +49,7 @@ https://你的站点域名/auth/callback
 如果你还在本地联调：
 
 ```text
-http://localhost:5173/auth/callback
+http://127.0.0.1:5174/auth/callback
 ```
 
 同时在本站后端 `.env` 中填写：

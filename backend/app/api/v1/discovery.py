@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, or_
+from sqlalchemy import select, asc, desc, or_
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
@@ -12,6 +12,48 @@ from app.schemas import story as node_schema
 from app.schemas import common as common_schema
 
 router = APIRouter()
+
+# ==========================================
+# ⭐ 精选节点 (Featured)
+# ==========================================
+
+@router.get(
+    "/featured",
+    response_model=List[node_schema.StoryNodeListItem],
+    summary="精选节点",
+    operation_id="getFeaturedNodes",
+    responses={
+        200: {"description": "获取成功"},
+        422: {"model": common_schema.ValidationErrorResponse, "description": "参数校验失败"},
+    },
+)
+async def get_featured_nodes(
+    limit: int = Query(6, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    获取管理员标记的精选节点。
+    排序优先级：
+    1. `feature_rank` 较小的节点优先
+    2. 未设置 `feature_rank` 的节点排后
+    3. 同 rank 下按发布时间倒序
+    """
+    stmt = (
+        select(StoryNode)
+        .options(selectinload(StoryNode.author))
+        .where(StoryNode.status == NodeStatus.PUBLISHED)
+        .where(StoryNode.is_featured.is_(True))
+        .order_by(
+            StoryNode.feature_rank.is_(None),
+            asc(StoryNode.feature_rank),
+            desc(StoryNode.published_at),
+        )
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
 
 # ==========================================
 # 🌊 最新动态 (Live Feed)

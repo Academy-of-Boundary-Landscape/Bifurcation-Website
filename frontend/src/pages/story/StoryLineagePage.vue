@@ -1,57 +1,55 @@
 <script setup lang="ts">
 import { NCard, NButton, NSpace, NTag, NSpin, NTimeline, NTimelineItem, NAvatar, NDivider } from 'naive-ui'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { computed, ref } from 'vue'
-import type { StoryNodeRead, StoryNode } from '@/types/models'
-import { useQuery, useMutation } from '@tanstack/vue-query'
-import { get, post } from '@/services/http'
 import { useAuthStore } from '@/stores/auth'
 import { useMessage } from 'naive-ui'
+import { useNodeDetailQuery, useNodeLineageQuery } from '@/features/story/queries'
+import { useToggleLikeMutation } from '@/features/interaction/queries'
+import StoryCreateConfirmModal from '@/components/story/StoryCreateConfirmModal.vue'
+import { buildStoryWriteRoute } from '@/features/story/navigation'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const authStore = useAuthStore()
 const nodeId = computed(() => Number(route.params.nodeId))
+const showCreateModal = ref(false)
 
-// 获取节点详情
-const { data: node, isLoading } = useQuery<StoryNodeRead>({
-  queryKey: ['story-node', nodeId],
-  queryFn: () => get<StoryNodeRead>(`/story/node/${nodeId.value}`),
-})
+const { data: node, isLoading } = useNodeDetailQuery(nodeId)
+const { data: lineage } = useNodeLineageQuery(nodeId)
+const { mutate: toggleLike, isPending: togglingLike } = useToggleLikeMutation()
 
-// 获取完整分支阅读路径
-const { data: lineage } = useQuery<StoryNodeRead[]>({
-  queryKey: ['story-lineage', nodeId],
-  queryFn: () => get<StoryNodeRead[]>(`/story/node/${nodeId.value}/lineage`),
-})
-
-// 点赞
-const { mutate: toggleLike, isPending: togglingLike } = useMutation({
-  mutationFn: () => post<{ action: string; likes_count: number }>(`/interaction/node/${nodeId.value}/like`),
-  onSuccess: (data) => {
-    message.success(data.action === 'like' ? '点赞成功' : '已取消点赞')
-  },
-})
-
-function handleToggleLike() {
-  toggleLike()
+function handleToggleLike(targetNodeId: number) {
+  toggleLike(
+    { nodeId: targetNodeId, bookId: node.value?.book_id },
+    {
+      onSuccess: (data) => {
+        message.success(data.action === 'liked' ? '点赞成功' : '已取消点赞')
+      },
+      onError: () => {
+        message.error('操作失败，请重试')
+      },
+    }
+  )
 }
 
-function handleContinue() {
+function handleCreateChildNode() {
   if (!authStore.isAuthenticated) {
-    router.push({ name: 'login', query: { redirect: route.fullPath } })
+    void router.push({ name: 'login', query: { redirect: route.fullPath } })
     return
   }
-  router.push({ name: 'story-write', params: { bookId: node.value?.book_id }, query: { parentId: nodeId.value, mode: 'continue' } })
+  showCreateModal.value = true
 }
 
-function handleBranch() {
-  if (!authStore.isAuthenticated) {
-    router.push({ name: 'login', query: { redirect: route.fullPath } })
-    return
-  }
-  router.push({ name: 'story-write', params: { bookId: node.value?.book_id }, query: { parentId: nodeId.value, mode: 'branch' } })
+function confirmCreateChildNode() {
+  if (!node.value) return
+  void router.push(buildStoryWriteRoute(node.value.book_id, nodeId.value))
+}
+
+function handleBackToTree() {
+  if (!node.value) return
+  void router.push({ name: 'book-detail', params: { bookId: node.value.book_id }, query: { focusNodeId: node.value.id } })
 }
 </script>
 
@@ -72,6 +70,11 @@ function handleBranch() {
             </router-link>
             <span v-if="index < lineage.length - 1" class="text-#666666">→</span>
           </template>
+        </div>
+        <div v-if="node" class="mt-4 flex justify-end">
+          <n-button size="small" @click="handleBackToTree">
+            返回故事树
+          </n-button>
         </div>
       </n-card>
 
@@ -115,20 +118,17 @@ function handleBranch() {
             
             <!-- 操作按钮 -->
             <div class="mt-4 pt-4 border-t border-#2a2a2a">
-              <nspace>
-                <n-button size="small" type="primary" @click="handleToggleLike" :loading="togglingLike && item.id === nodeId">
+              <n-space>
+                <n-button size="small" type="primary" @click="handleToggleLike(item.id)" :loading="togglingLike && item.id === nodeId">
                   👍 {{ item.likes_count || 0 }} 赞
                 </n-button>
                 <n-button size="small" @click="$router.push({ name: 'story-node', params: { nodeId: item.id } })">
                   查看详情
                 </n-button>
-                <n-button v-if="index === lineage.length - 1" size="small" @click="handleContinue">
-                  ✍️ 沿此续写
+                <n-button v-if="index === lineage.length - 1" size="small" @click="handleCreateChildNode">
+                  创建后续节点
                 </n-button>
-                <n-button v-if="index === lineage.length - 1" size="small" @click="handleBranch">
-                  🌿 创建分支
-                </n-button>
-              </nspace>
+              </n-space>
             </div>
           </n-card>
         </template>
@@ -150,6 +150,14 @@ function handleBranch() {
           </n-button>
         </div>
       </div>
+
+      <story-create-confirm-modal
+        v-if="node"
+        v-model:show="showCreateModal"
+        :book-title="null"
+        :parent-node="node"
+        @confirm="confirmCreateChildNode"
+      />
     </n-spin>
   </div>
 </template>

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { NCard, NSpace } from 'naive-ui'
-import { RouterLink, useRouter, useRoute } from 'vue-router'
-import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const route = useRoute()
 
 function handleHome() {
-  router.push({ name: 'home' })
+  void router.push({ name: 'home' })
+}
+
+function handleProfile() {
+  void router.push({ name: 'profile' })
 }
 </script>
 
@@ -36,8 +38,7 @@ function handleHome() {
           <n-button 
             type="default" 
             size="large" 
-            :component="RouterLink" 
-            :to="{ name: 'profile' }"
+            @click="handleProfile"
           >
             查看个人中心
           </n-button>

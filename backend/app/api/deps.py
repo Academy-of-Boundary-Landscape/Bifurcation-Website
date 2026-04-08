@@ -73,7 +73,7 @@ async def get_current_user_or_none(
     user = result.scalars().first()
     if not user:
         return None
-    if not user.is_active or not user.is_verified:
+    if not user.is_active:
         return None
     return user
 

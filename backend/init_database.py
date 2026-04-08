@@ -34,8 +34,8 @@ async def init_models():
     logger.info("数据库表结构创建完成！")
 
 
-async def create_admin_account():
-    """创建一个默认管理员账号（绑定 SSO subject）。"""
+async def maybe_create_prebound_admin_account():
+    """可选：仅在显式提供 ADMIN_AUTH_SUBJECT 时预绑定管理员账号。"""
     default_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
     default_username = os.getenv("ADMIN_USERNAME", "admin")
     admin_auth_provider = os.getenv("ADMIN_AUTH_PROVIDER", "casdoor").strip() or "casdoor"
@@ -45,10 +45,11 @@ async def create_admin_account():
     normalized_username = default_username.strip()
 
     if not admin_auth_subject:
-        raise RuntimeError(
-            "缺少 ADMIN_AUTH_SUBJECT。当前初始化脚本会直接创建绑定 SSO 的管理员账号，"
-            "请先在 .env 中配置管理员对应的 Casdoor subject。"
+        logger.info(
+            "未提供 ADMIN_AUTH_SUBJECT，跳过预创建管理员账号。"
+            "当前推荐方式是让 Casdoor 管理员首次登录时，按 SSO admin claim 自动创建本地 admin。"
         )
+        return
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -80,12 +81,11 @@ async def create_admin_account():
             auth_user_id=admin_auth_user_id,
             role=UserRole.ADMIN,
             is_active=True,
-            is_verified=True,
         )
         session.add(admin)
         await session.commit()
         logger.info(
-            "默认管理员账户已创建：email=%s username=%s auth_provider=%s auth_subject=%s",
+            "预绑定管理员账户已创建：email=%s username=%s auth_provider=%s auth_subject=%s",
             default_email,
             default_username,
             admin_auth_provider,
@@ -95,7 +95,7 @@ async def create_admin_account():
 
 async def main():
     await init_models()
-    await create_admin_account()
+    await maybe_create_prebound_admin_account()
     # 关闭引擎连接池
     await engine.dispose()
 

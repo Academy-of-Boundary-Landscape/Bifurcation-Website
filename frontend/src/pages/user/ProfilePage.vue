@@ -1,66 +1,28 @@
 <script setup lang="ts">
-import { NCard, NButton, NSpace, NTag, NSpin, NTimeline, NTimelineItem, NAvatar, NUpload, NIcon, NProgress } from 'naive-ui'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { computed, ref, onMounted, watch } from 'vue'
+import { NCard, NButton, NTag, NSpin, NAvatar, NUpload, NProgress } from 'naive-ui'
+import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
 import type { UploadOnChange } from 'naive-ui/es/upload/src/public-types'
-import type { User, StoryNodeRead } from '@/types/models'
-import { useQuery, useMutation } from '@tanstack/vue-query'
-import { get, put, post } from '@/services/http'
 import { useAuthStore } from '@/stores/auth'
 import { useMessage } from 'naive-ui'
+import { useMyProfileQuery, useUpdateMyProfileMutation, useUploadUserAvatarMutation, useUserNodesQuery } from '@/features/user/queries'
 
-const route = useRoute()
-const router = useRouter()
 const message = useMessage()
 const authStore = useAuthStore()
+const router = useRouter()
 
 // 获取当前用户信息
-const { data: user, isLoading, refetch: refetchUser } = useQuery<User>({
-  queryKey: ['user-profile'],
-  queryFn: () => get<User>('/auth/me'),
-})
+const { data: user, isLoading } = useMyProfileQuery()
 
-// 获取用户投稿的节点列表
-const { data: submittedNodes, isLoading: nodesLoading, refetch: refetchNodes } = useQuery<StoryNodeRead[]>({
-  queryKey: ['user-nodes'],
-  queryFn: () => get<StoryNodeRead[]>(`/story/node?author_id=${authStore.currentUser?.id}&limit=5`),
-  enabled: !!authStore.currentUser?.id,
-})
+const userNodesParams = computed(() => ({
+  authorId: authStore.currentUser?.id,
+  limit: 5,
+}))
+const { data: submittedNodes, isLoading: nodesLoading } = useUserNodesQuery(userNodesParams)
 
-// 更新用户资料
-const { mutate: updateUser, isPending: updatingUser } = useMutation({
-  mutationFn: (userData: Partial<User>) => put<User>(`/auth/me`, userData),
-  onSuccess: (updatedUser) => {
-    message.success('资料更新成功')
-    // 更新全局状态
-    authStore.currentUser = updatedUser
-  },
-  onError: (error) => {
-    console.error('更新失败:', error)
-    message.error('更新失败，请重试')
-  }
-})
+const { mutate: updateUser, isPending: updatingUser } = useUpdateMyProfileMutation()
 
-// 上传头像
-const { mutate: uploadAvatar, isPending: uploadingAvatar } = useMutation({
-  mutationFn: (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    return post<{ url: string }>('/uploads/', formData)
-  },
-  onSuccess: (data) => {
-    message.success('头像上传成功')
-    // 更新用户资料中的头像
-    if (user.value) {
-      const updatedUser = { ...user.value, avatar: data.url }
-      updateUser(updatedUser)
-    }
-  },
-  onError: (error) => {
-    console.error('上传失败:', error)
-    message.error('头像上传失败，请重试')
-  }
-})
+const { mutate: uploadAvatar, isPending: uploadingAvatar } = useUploadUserAvatarMutation()
 
 // 用户资料表单
 const form = ref({
@@ -73,15 +35,34 @@ const form = ref({
 const avatarFile = ref<File | null>(null)
 const avatarPreview = ref<string | null>(null)
 
-// 初始化表单数据
-onMounted(() => {
-  if (user.value) {
-    form.value.username = user.value.username || ''
-    form.value.bio = user.value.bio || ''
-    form.value.avatar = user.value.avatar || ''
-    avatarPreview.value = user.value.avatar || null
-  }
-})
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '-'
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed)
+}
+
+const registeredAtLabel = computed(() => formatDateTime(user.value?.created_at))
+
+watch(
+  user,
+  (nextUser) => {
+    if (!nextUser) return
+    form.value.username = nextUser.username || ''
+    form.value.bio = nextUser.bio || ''
+    form.value.avatar = nextUser.avatar || ''
+    avatarPreview.value = nextUser.avatar || null
+  },
+  { immediate: true },
+)
 
 // 文件选择处理
 const handleFileChange: UploadOnChange = ({ file }) => {
@@ -108,62 +89,113 @@ function handleSubmit() {
   
   // 如果有新头像，先上传
   if (avatarFile.value) {
-    uploadAvatar(avatarFile.value)
+    uploadAvatar(
+      {
+        file: avatarFile.value,
+        onProgress: (progress) => {
+          uploadProgress.value = progress
+        },
+      },
+      {
+        onSuccess: (data) => {
+          message.success('头像上传成功')
+          updateUser(
+            { username: form.value.username, bio: form.value.bio, avatar: data.url },
+            {
+              onSuccess: (updatedUser) => {
+                authStore.currentUser = updatedUser
+                avatarFile.value = null
+                form.value.avatar = updatedUser.avatar || ''
+              },
+              onError: (error) => {
+                console.error('更新失败:', error)
+                message.error('更新失败，请重试')
+              },
+            }
+          )
+        },
+        onError: (error) => {
+          console.error('上传失败:', error)
+          message.error('头像上传失败，请重试')
+        },
+      }
+    )
   } else {
-    // 没有新头像，直接更新其他资料
-    updateUser(form.value)
+    updateUser(
+      { username: form.value.username, bio: form.value.bio, avatar: form.value.avatar || undefined },
+      {
+        onSuccess: (updatedUser) => {
+          message.success('资料更新成功')
+          authStore.currentUser = updatedUser
+        },
+        onError: (error) => {
+          console.error('更新失败:', error)
+          message.error('更新失败，请重试')
+        },
+      }
+    )
   }
 }
 
 // 上传进度
 const uploadProgress = ref<number>(0)
 
-// 监听上传状态
-watch(uploadingAvatar, (newVal) => {
-  if (newVal) {
-    uploadProgress.value = 0
-    // 模拟上传进度
-    const interval = setInterval(() => {
-      if (uploadProgress.value < 100) {
-        uploadProgress.value += 10
-      }
-      if (uploadProgress.value >= 100) {
-        clearInterval(interval)
-      }
-    }, 100)
-  }
-})
+function handleOpenNode(nodeId: number) {
+  void router.push({ name: 'story-node', params: { nodeId } })
+}
+
+function handleStartWriting() {
+  void router.push({ name: 'books' })
+}
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 py-8">
+  <div class="ui-page-stack profile-page">
     <n-spin :show="isLoading">
-      <!-- 用户基本信息 -->
-      <n-card class="bg-#1a1a1a border-#2a2a2a mb-6">
+      <section class="ui-page-hero ui-shell-panel ui-shell-grid">
+        <div class="ui-page-hero__grid profile-hero">
+          <div>
+            <p class="ui-shell-kicker">Account Console</p>
+            <h1 class="ui-shell-title">个人中心</h1>
+            <p class="ui-page-hero__lead">
+              管理你的身份资料、头像和最近投稿。这里应该像一个稳定的作者控制台，而不是零散的表单集合。
+            </p>
+          </div>
+          <div class="profile-hero__metrics">
+            <div class="ui-metric-card">
+              <p class="ui-metric-card__label">Role</p>
+              <p class="ui-metric-card__value">{{ user?.role || 'observer' }}</p>
+            </div>
+            <div class="ui-metric-card">
+              <p class="ui-metric-card__label">Nodes</p>
+              <p class="ui-metric-card__value">{{ submittedNodes?.length || 0 }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <n-card class="ui-shell-panel profile-card">
         <template #header>
-          <h1 class="text-3xl font-bold text-white">个人中心</h1>
-          <p class="text-#666666 mt-2">管理您的账户和创作</p>
+          <h2 class="ui-shell-title">资料设置</h2>
+          <p class="profile-card__lead">更新你在站内显示的名称、简介和头像。</p>
         </template>
         
-        <div class="flex flex-col md:flex-row gap-8">
-          <!-- 头像区域 -->
-          <div class="flex-shrink-0">
-            <div class="flex flex-col items-center gap-4">
-              <div class="relative">
+        <div class="profile-card__layout">
+          <div class="profile-avatar-panel">
+            <div class="profile-avatar-panel__inner">
+              <div class="profile-avatar-frame">
                 <n-avatar 
                   :size="120" 
                   :src="avatarPreview || user?.avatar || undefined"
                 >
                   {{ user?.username?.charAt(0).toUpperCase() ?? '' }}
                 </n-avatar>
-                <div class="absolute -bottom-2 -right-2 bg-#8b5cf6 text-white rounded-full w-8 h-8 flex items-center justify-center text-xs">
-                  ✏️
+                <div class="profile-avatar-frame__badge">
+                  EDIT
                 </div>
               </div>
               
-              <!-- 上传组件 -->
               <n-upload
-                ref="avatarUploadRef"
                 :show-file-list="false"
                 :multiple="false"
                 :custom-request="() => {}"
@@ -171,67 +203,58 @@ watch(uploadingAvatar, (newVal) => {
                 accept="image/*"
                 :max="1"
               >
-                <n-button 
-                  size="small" 
-                  type="primary" 
-                  secondary
-                >
+                <n-button size="small" ghost>
                   更换头像
                 </n-button>
               </n-upload>
               
-              <!-- 上传进度 -->
-              <div v-if="uploadingAvatar" class="w-full">
+              <div v-if="uploadingAvatar" class="profile-avatar-panel__progress">
                 <n-progress 
                   :percentage="uploadProgress" 
                   :show-text="true" 
                   :height="8" 
-                  color="#8b5cf6"
+                  color="#f2f2f2"
                 />
               </div>
             </div>
           </div>
           
-          <!-- 基本信息区域 -->
-          <div class="flex-1 min-w-0">
-            <h2 class="text-xl font-bold text-white mb-4">{{ user?.username ?? '未登录' }}</h2>
+          <div class="profile-form-panel">
+            <h2 class="profile-form-panel__title">{{ user?.username ?? '未登录' }}</h2>
             
-            <div class="space-y-4">
-              <!-- 用户名 -->
-              <div class="flex items-center gap-3">
-                <span class="text-#666666 w-24">用户名:</span>
+            <div class="profile-form-grid">
+              <div class="profile-field">
+                <span class="profile-field__label">用户名</span>
                 <input 
                   v-model="form.username" 
-                  class="bg-#2a2a2a border border-#2a2a2a rounded-lg px-4 py-2 text-white placeholder-#666666 focus:border-#8b5cf6 focus:outline-none w-full"
+                  class="profile-input"
                   placeholder="请输入用户名"
                 />
               </div>
               
-              <!-- 个人简介 -->
-              <div class="flex items-center gap-3">
-                <span class="text-#666666 w-24">个人简介:</span>
+              <div class="profile-field">
+                <span class="profile-field__label">个人简介</span>
                 <textarea 
                   v-model="form.bio" 
-                  class="bg-#2a2a2a border border-#2a2a2a rounded-lg px-4 py-2 text-white placeholder-#666666 focus:border-#8b5cf6 focus:outline-none w-full h-24"
+                  class="profile-input profile-input--textarea"
                   placeholder="请简单介绍自己..."
                 ></textarea>
               </div>
               
-              <!-- 个人信息 -->
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="flex items-center gap-3">
-                  <span class="text-#666666 w-24">邮箱:</span>
-                  <span class="text-#d9d9d9">{{ user?.email }}</span>
+              <div class="profile-meta-grid">
+                <div class="profile-meta-card ui-panel-section">
+                  <span class="profile-meta-card__label">邮箱</span>
+                  <span class="profile-meta-card__value">{{ user?.email || '-' }}</span>
                 </div>
-                <div class="flex items-center gap-3">
-                  <span class="text-#666666 w-24">注册时间:</span>
-                  <span class="text-#d9d9d9">{{ user?.created_at ? new Date(user.created_at).toLocaleDateString('zh-CN') : '-' }}</span>
+                <div class="profile-meta-card ui-panel-section">
+                  <span class="profile-meta-card__label">注册时间</span>
+                  <span class="profile-meta-card__value">{{ registeredAtLabel }}</span>
                 </div>
               </div>
               
-              <!-- 角色标签 -->
-              <div class="flex items-center gap-3">
-                <span class="text-#666666 w-24">角色:</span>
+              <div class="profile-field">
+                <span class="profile-field__label">角色</span>
+                <div class="profile-role-tags">
                 <n-tag 
                   v-if="user?.role === 'admin'" 
                   type="error"
@@ -253,11 +276,11 @@ watch(uploadingAvatar, (newVal) => {
                 >
                   {{ user?.role }}
                 </n-tag>
+                </div>
               </div>
             </div>
             
-            <!-- 保存按钮 -->
-            <div class="mt-6">
+            <div class="profile-actions">
               <n-button 
                 type="primary" 
                 :loading="updatingUser || uploadingAvatar" 
@@ -270,43 +293,42 @@ watch(uploadingAvatar, (newVal) => {
         </div>
       </n-card>
       
-      <!-- 用户投稿节点 -->
-      <n-card class="bg-#1a1a1a border-#2a2a2a">
+      <n-card class="ui-shell-panel profile-card">
         <template #header>
-          <h2 class="text-xl font-bold text-white">我的投稿</h2>
-          <p class="text-#666666 mt-2">您已投稿 {{ submittedNodes?.length || 0 }} 个节点</p>
+          <h2 class="ui-shell-title">我的投稿</h2>
+          <p class="profile-card__lead">最近提交的 {{ submittedNodes?.length || 0 }} 个节点会显示在这里。</p>
         </template>
         
         <n-spin :show="nodesLoading">
-          <div v-if="!submittedNodes || submittedNodes.length === 0" class="text-center py-12">
-            <p class="text-#666666">暂无投稿节点</p>
+          <div v-if="!submittedNodes || submittedNodes.length === 0" class="profile-empty-state ui-panel-section">
+            <p class="ui-shell-kicker">Archive / Empty</p>
+            <h3 class="ui-shell-title">暂无投稿节点</h3>
+            <p class="ui-page-section__lead">你还没有在这个账户下留下任何世界线分支。</p>
               <n-button 
                 type="primary" 
-                class="mt-4" 
-                :component="RouterLink" 
-                :to="{ name: 'books' }"
+                @click="handleStartWriting"
               >
               开始创作
             </n-button>
           </div>
           
-          <div v-else class="space-y-4">
-            <div 
+          <div v-else class="profile-node-list">
+            <article
               v-for="node in submittedNodes" 
               :key="node.id" 
-              class="border-b border-#2a2a2a pb-4 last:border-b-0 last:pb-0 hover:bg-#2a2a2a transition-colors cursor-pointer"
-              @click="$router.push({ name: 'story-node', params: { nodeId: node.id } })"
+              class="profile-node-card ui-panel-section"
+              @click="handleOpenNode(node.id)"
             >
-              <div class="flex items-start justify-between">
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold text-white mb-1">
+              <div class="profile-node-card__inner">
+                <div class="profile-node-card__content">
+                  <h3 class="profile-node-card__title">
                     {{ node.title || node.branch_name || '无标题' }}
                   </h3>
-                  <p class="text-#666666 text-sm line-clamp-2">
-                    {{ node.content?.substring(0, 100) }}{{ node.content?.length > 100 ? '...' : '' }}
+                  <p class="profile-node-card__summary">
+                    {{ node.summary || '暂无摘要。' }}
                   </p>
-                  <div class="flex items-center gap-3 text-#666666 text-xs mt-2">
-                    <span>{{ node.created_at ? new Date(node.created_at).toLocaleDateString('zh-CN') : '-' }}</span>
+                  <div class="profile-node-card__meta">
+                    <span>{{ node.created_at ? formatDateTime(node.created_at) : '-' }}</span>
                     <span>{{ node.status }}</span>
                     <span>{{ node.likes_count || 0 }} 赞</span>
                     <span>{{ node.comments_count || 0 }} 评论</span>
@@ -316,15 +338,248 @@ watch(uploadingAvatar, (newVal) => {
                 <n-avatar 
                   :size="32" 
                   :src="node.author?.avatar ?? undefined"
-                  class="flex-shrink-0"
+                  class="profile-node-card__avatar"
                 >
                   {{ node.author?.username?.charAt(0).toUpperCase() }}
                 </n-avatar>
               </div>
-            </div>
+            </article>
           </div>
         </n-spin>
       </n-card>
     </n-spin>
   </div>
 </template>
+
+<style scoped>
+.profile-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+}
+
+.profile-hero {
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.9fr);
+  align-items: start;
+}
+
+.profile-hero__metrics {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-card__lead {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.profile-card__layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 28px;
+}
+
+.profile-avatar-panel__inner {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
+
+.profile-avatar-frame {
+  position: relative;
+}
+
+.profile-avatar-frame__badge {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.profile-avatar-panel__progress {
+  width: 100%;
+}
+
+.profile-form-panel {
+  min-width: 0;
+}
+
+.profile-form-panel__title {
+  margin: 0 0 18px;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: 0.03em;
+}
+
+.profile-form-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-field {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-field__label {
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.profile-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.profile-input:focus {
+  outline: none;
+  border-color: var(--line-strong);
+  box-shadow: var(--glow-focus);
+}
+
+.profile-input::placeholder {
+  color: var(--text-faint);
+}
+
+.profile-input--textarea {
+  min-height: 120px;
+  padding-top: 12px;
+  resize: vertical;
+}
+
+.profile-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profile-meta-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.profile-meta-card__label {
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.profile-meta-card__value {
+  color: var(--text-secondary);
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.profile-role-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-actions {
+  margin-top: 6px;
+}
+
+.profile-empty-state {
+  display: grid;
+  gap: 10px;
+  padding: 28px;
+  text-align: center;
+  justify-items: center;
+}
+
+.profile-node-list {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-node-card {
+  cursor: pointer;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.profile-node-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--glow-focus);
+  transform: translateY(-1px);
+}
+
+.profile-node-card__inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.profile-node-card__content {
+  min-width: 0;
+  flex: 1;
+}
+
+.profile-node-card__title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.profile-node-card__summary {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.profile-node-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.profile-node-card__avatar {
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .profile-hero,
+  .profile-card__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-page {
+    padding-inline: 12px;
+  }
+
+  .profile-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-node-card__inner {
+    flex-direction: column;
+  }
+}
+</style>

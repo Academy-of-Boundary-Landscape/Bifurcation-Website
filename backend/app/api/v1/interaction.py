@@ -14,7 +14,7 @@ from app.models.interaction import StoryComment, Notification, NotificationType
 from app.schemas import interaction as interact_schema
 from app.schemas import common as common_schema
 from app.schemas.story import MessageResponse
-from app.utils.notification import send_notification
+from app.services.interactions import create_story_comment, toggle_story_node_like
 
 router = APIRouter()
 
@@ -40,54 +40,7 @@ async def toggle_node_like(
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    # 1. 检查节点是否存在
-    node = await db.get(StoryNode, node_id)
-    if not node:
-        raise HTTPException(status_code=404, detail="节点不存在")
-    if node.freeze_interactions:
-        raise HTTPException(status_code=400, detail="该节点已冻结互动")
-
-    # 防御 likes_count 为空的情况
-    if node.likes_count is None:
-        node.likes_count = 0
-
-    # 2. 检查是否点过赞
-    stmt = select(NodeLike).where(
-        NodeLike.user_id == current_user.id,
-        NodeLike.node_id == node_id,
-    )
-    result = await db.execute(stmt)
-    existing_like = result.scalars().first()
-
-    action = ""
-    if existing_like:
-        await db.delete(existing_like)
-        if node.likes_count > 0:
-            node.likes_count -= 1
-        action = "unliked"
-    else:
-        new_like = NodeLike(user_id=current_user.id, node_id=node_id)
-        db.add(new_like)
-        node.likes_count += 1
-        action = "liked"
-
-        # 触发通知（自己点自己不通知，send_notification 内部已处理）
-        await send_notification(
-            db=db,
-            receiver_id=node.author_id,
-            sender_id=current_user.id,
-            type=NotificationType.LIKED,
-            node_id=node.id,
-            book_id=node.book_id,
-            dedupe_key=f"liked:{current_user.id}:{node.id}",
-        )
-
-    await db.commit()
-    return {
-        "status": "success",
-        "action": action,
-        "likes_count": node.likes_count,
-    }
+    return await toggle_story_node_like(db=db, current_user=current_user, node_id=node_id)
 
 
 # ==========================================
@@ -141,52 +94,12 @@ async def create_node_comment(
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    node = await db.get(StoryNode, node_id)
-    if not node:
-        raise HTTPException(status_code=404, detail="节点不存在")
-    if node.freeze_interactions:
-        raise HTTPException(status_code=400, detail="该节点已冻结互动")
-
-    if not comment_in.content or not comment_in.content.strip():
-        raise HTTPException(status_code=400, detail="评论内容不能为空")
-
-    comment = StoryComment(
-        node_id=node_id,
-        book_id=node.book_id,   # 冗余 book_id，便于后台聚合
-        user_id=current_user.id,
-        content=comment_in.content.strip(),
-    )
-    db.add(comment)
-
-    # 🛡️ 同步更新节点的评论计数器
-    if node.comments_count is None:
-        node.comments_count = 0
-    node.comments_count += 1
-
-    # 触发通知（自己评论自己不通知，send_notification 内部已处理）
-    await send_notification(
+    return await create_story_comment(
         db=db,
-        receiver_id=node.author_id,
-        sender_id=current_user.id,
-        type=NotificationType.COMMENTED,
-        node_id=node.id,
-        book_id=node.book_id,
-        dedupe_key=f"commented:{current_user.id}:{node.id}",
+        current_user=current_user,
+        node_id=node_id,
+        comment_in=comment_in,
     )
-
-    await db.commit()
-    await db.refresh(comment)
-
-    # 预加载 user，避免 response_model 触发懒加载
-    comment = (
-        await db.execute(
-            select(StoryComment)
-            .options(selectinload(StoryComment.user))
-            .where(StoryComment.id == comment.id)
-        )
-    ).scalars().first()
-
-    return comment
 
 
 # ==========================================

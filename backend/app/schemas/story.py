@@ -63,6 +63,7 @@ class StoryNodeListItem(BaseModel):
     children_count: int
 
     is_ending: bool
+    freeze_interactions: bool
     is_featured: bool
 
     published_at: Optional[datetime] = None

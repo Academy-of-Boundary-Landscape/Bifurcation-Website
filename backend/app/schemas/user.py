@@ -1,5 +1,6 @@
 # app/schemas/user.py
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from datetime import datetime
 from app.models.user import UserRole
 
 class UserUpdate(BaseModel):
@@ -8,27 +9,26 @@ class UserUpdate(BaseModel):
     avatar: str | None = Field(None, description="头像链接")
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: EmailStr
     username: str
     display_name: str | None = None
     role: UserRole
     is_active: bool
-    is_verified: bool
     
     # 新增字段
     bio: str | None
     avatar: str | None
-
-    class Config:
-        from_attributes = True
+    created_at: datetime
+    updated_at: datetime
 
 class UserProfileResponse(UserResponse):
+    model_config = ConfigDict(from_attributes=True)
+
     nodes_count: int = 0
     likes_count: int = 0
-
-    class Config:
-        from_attributes = True
 
 class UserAdminUpdate(BaseModel):
     role: UserRole | None = None      # 提拔/撤职

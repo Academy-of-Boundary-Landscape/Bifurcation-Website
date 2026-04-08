@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { NCard, NInput, NButton, NSpace } from 'naive-ui'
-import { ref, computed } from 'vue'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { post } from '@/services/http'
+import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useCreateCommentMutation } from '@/features/interaction/queries'
 
 const props = defineProps<{
   nodeId: number
@@ -12,27 +11,20 @@ const props = defineProps<{
 const emits = defineEmits(['comment-added', 'require-login'])
 
 const authStore = useAuthStore()
-const queryClient = useQueryClient()
 const content = ref('')
-const loading = ref(false)
-
-// 提交评论
-const { mutate: submitComment } = useMutation({
-  mutationFn: () => post(`/interaction/node/${props.nodeId}/comment`, { content: content.value }),
-  onSuccess: (data) => {
-    content.value = ''
-    emits('comment-added', data)
-    
-    // 更新缓存
-    queryClient.invalidateQueries({ queryKey: ['node-comments', props.nodeId] })
-  }
-})
+const { mutate: submitComment, isPending } = useCreateCommentMutation()
 
 function handleSubmit() {
   if (!content.value.trim()) return
-  
-  loading.value = true
-  submitComment()
+  submitComment(
+    { nodeId: props.nodeId, payload: { content: content.value } },
+    {
+      onSuccess: (data) => {
+        content.value = ''
+        emits('comment-added', data)
+      },
+    }
+  )
 }
 </script>
 
@@ -56,7 +48,7 @@ function handleSubmit() {
         class="mb-4"
       />
       <n-space>
-        <n-button type="primary" @click="handleSubmit" :loading="loading" :disabled="loading || !content.trim()">
+        <n-button type="primary" @click="handleSubmit" :loading="isPending" :disabled="isPending || !content.trim()">
           发表评论
         </n-button>
       </n-space>

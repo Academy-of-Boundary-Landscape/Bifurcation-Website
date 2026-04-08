@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { NButton, NIcon } from 'naive-ui'
-import { ref, computed, onMounted } from 'vue'
-import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { post, get } from '@/services/http'
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useToggleLikeMutation } from '@/features/interaction/queries'
 
 const props = defineProps<{
   nodeId: number
@@ -14,10 +13,9 @@ const props = defineProps<{
 const emits = defineEmits(['like-toggle', 'require-login'])
 
 const authStore = useAuthStore()
-const queryClient = useQueryClient()
-const loading = ref(false)
 const isLikedLocal = ref(props.isLiked)
 const likesCountLocal = ref(props.likesCount)
+const { mutate: toggleLike, isPending: loading } = useToggleLikeMutation()
 
 // 初始化状态
 onMounted(() => {
@@ -26,18 +24,6 @@ onMounted(() => {
 })
 
 // 点赞/取消点赞
-const { mutate: toggleLike } = useMutation({
-  mutationFn: () => post<{ action: string; likes_count: number }>(`/interaction/node/${props.nodeId}/like`),
-  onSuccess: (data) => {
-    isLikedLocal.value = data.action === 'like'
-    likesCountLocal.value = data.likes_count
-    emits('like-toggle', { action: data.action, likesCount: data.likes_count })
-    
-    // 更新缓存
-    queryClient.invalidateQueries({ queryKey: ['story-node', props.nodeId] })
-  }
-})
-
 function handleToggle() {
   if (!authStore.isAuthenticated) {
     // 触发登录事件
@@ -45,7 +31,16 @@ function handleToggle() {
     return
   }
   
-  toggleLike()
+  toggleLike(
+    { nodeId: props.nodeId },
+    {
+      onSuccess: (data) => {
+        isLikedLocal.value = data.action === 'liked'
+        likesCountLocal.value = data.likes_count
+        emits('like-toggle', { action: data.action, likesCount: data.likes_count })
+      },
+    }
+  )
 }
 </script>
 

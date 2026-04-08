@@ -1,229 +1,241 @@
 <script setup lang="ts">
-import { NCard, NButton, NSpace, NTag, NSpin } from 'naive-ui'
-import { RouterLink } from 'vue-router'
-import { ref } from 'vue'
-import type { StoryNodeTreeItem } from '@/types/models'
-import { useQuery } from '@tanstack/vue-query'
-import { get } from '@/services/http'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { NButton, NCard, NSpin } from 'naive-ui'
 
-// 获取待审核节点数量
-const { data: pendingCount, isLoading: pendingLoading } = useQuery({
-  queryKey: ['pending-count'],
-  queryFn: () => get<{ count: number }>('/admin/nodes/pending/count'),
-})
+import { useAdminStatsQuery } from '@/features/admin/queries'
 
-// 获取今日新增节点数量
-const { data: todayCount, isLoading: todayLoading } = useQuery({
-  queryKey: ['today-count'],
-  queryFn: () => get<{ count: number }>('/admin/nodes/today/count'),
-})
+const router = useRouter()
+const { data: stats, isLoading } = useAdminStatsQuery()
 
-// 获取总节点数
-const { data: totalCount, isLoading: totalLoading } = useQuery({
-  queryKey: ['total-count'],
-  queryFn: () => get<{ count: number }>('/story/node/count'),
-})
+const statCards = computed(() => [
+  {
+    label: '待审核节点',
+    value: stats.value?.nodes.pending ?? 0,
+    hint: '需要管理员处理',
+    actionLabel: '进入节点管理',
+    routeName: 'admin-nodes',
+  },
+  {
+    label: '近 7 日新增节点',
+    value: stats.value?.nodes.new_7d ?? 0,
+    hint: '观察内容活跃度',
+    actionLabel: '查看故事册',
+    routeName: 'admin-books',
+  },
+  {
+    label: '已发布节点',
+    value: stats.value?.nodes.published ?? 0,
+    hint: '当前公开可见内容',
+    actionLabel: '管理故事册',
+    routeName: 'admin-books',
+  },
+  {
+    label: '活跃用户',
+    value: stats.value?.users.active ?? 0,
+    hint: '当前可正常登录用户',
+    actionLabel: '用户管理',
+    routeName: 'admin-users',
+  },
+])
 
-// 获取用户总数
-const { data: userCount, isLoading: userLoading } = useQuery({
-  queryKey: ['user-count'],
-  queryFn: () => get<{ count: number }>('/auth/users/count'),
-})
+const operationalCards = computed(() => [
+  {
+    title: '审核工作台',
+    summary: '集中处理待审核节点，查看正文、填写驳回原因并直接发布或归档。',
+    routeName: 'admin-nodes',
+  },
+  {
+    title: '故事册管理',
+    summary: '创建新故事册，切换阶段，控制是否开放新节点创作。',
+    routeName: 'admin-books',
+  },
+  {
+    title: '用户管理',
+    summary: '查看用户角色和活跃状态，维护后台权限与封禁状态。',
+    routeName: 'admin-users',
+  },
+])
 
-// 获取评论总数
-const { data: commentCount, isLoading: commentLoading } = useQuery({
-  queryKey: ['comment-count'],
-  queryFn: () => get<{ count: number }>('/interaction/comment/count'),
-})
+function goToAdminRoute(routeName: string) {
+  void router.push({ name: routeName })
+}
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto px-4 py-8">
-    <h1 class="text-3xl font-bold text-white mb-2">管理员仪表盘</h1>
-    <p class="text-#666666 mb-8">查看平台运营数据和管理入口</p>
-    
-    <!-- 统计卡片 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <n-card 
-        class="bg-#1a1a1a border-#2a2a2a hover:border-#8b5cf6 transition-colors"
-        :bordered="true"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-#666666 text-sm">待审核节点</p>
-            <h2 class="text-3xl font-bold text-white mt-1">{{ pendingCount?.count || 0 }}</h2>
-          </div>
-          <div class="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center text-white">
-            📋
-          </div>
+  <div class="ui-page-stack admin-page">
+    <section class="ui-page-hero ui-shell-panel ui-shell-grid">
+      <div class="ui-page-hero__grid admin-hero">
+        <div>
+          <p class="ui-shell-kicker">Admin / Console</p>
+          <h1 class="ui-shell-title">管理员仪表盘</h1>
+          <p class="ui-page-hero__lead">
+            这里不是一组花哨卡片，而是后台主操作入口。管理员应该能从这里快速判断积压、活跃度和最需要处理的工作。
+          </p>
         </div>
-        <div class="mt-4">
-          <n-button 
-            type="primary" 
-            size="small" 
-            :component="RouterLink" 
-            :to="{ name: 'admin-pending' }"
-          >
-            查看列表
-          </n-button>
-        </div>
-      </n-card>
-      
-      <n-card 
-        class="bg-#1a1a1a border-#2a2a2a hover:border-#8b5cf6 transition-colors"
-        :bordered="true"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-#666666 text-sm">今日新增</p>
-            <h2 class="text-3xl font-bold text-white mt-1">{{ todayCount?.count || 0 }}</h2>
-          </div>
-          <div class="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white">
-            📅
-          </div>
-        </div>
-        <div class="mt-4">
-          <n-button 
-            type="primary" 
-            size="small" 
-            :component="RouterLink" 
-            :to="{ name: 'books' }"
-          >
-            查看详情
-          </n-button>
-        </div>
-      </n-card>
-      
-      <n-card 
-        class="bg-#1a1a1a border-#2a2a2a hover:border-#8b5cf6 transition-colors"
-        :bordered="true"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-#666666 text-sm">总节点数</p>
-            <h2 class="text-3xl font-bold text-white mt-1">{{ totalCount?.count || 0 }}</h2>
-          </div>
-          <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white">
-            🌳
-          </div>
-        </div>
-        <div class="mt-4">
-          <n-button 
-            type="primary" 
-            size="small" 
-            :component="RouterLink" 
-            :to="{ name: 'admin-books' }"
-          >
-            管理故事册
-          </n-button>
-        </div>
-      </n-card>
-      
-      <n-card 
-        class="bg-#1a1a1a border-#2a2a2a hover:border-#8b5cf6 transition-colors"
-        :bordered="true"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-#666666 text-sm">活跃用户</p>
-            <h2 class="text-3xl font-bold text-white mt-1">{{ userCount?.count || 0 }}</h2>
-          </div>
-          <div class="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-white">
-            👥
-          </div>
-        </div>
-        <div class="mt-4">
-          <n-button 
-            type="primary" 
-            size="small" 
-            :component="RouterLink" 
-            :to="{ name: 'admin-users' }"
-          >
-            用户管理
-          </n-button>
-        </div>
-      </n-card>
-    </div>
-    
-    <!-- 快速访问 -->
-    <n-card class="bg-#1a1a1a border-#2a2a2a">
-      <template #header>
-        <h2 class="text-xl font-bold text-white">快速访问</h2>
-      </template>
-      
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <n-card 
-          class="bg-#2a2a2a border-#3a3a3a hover:bg-#3a3a3a transition-colors cursor-pointer"
-          @click="$router.push({ name: 'admin-pending' })"
-        >
-          <div class="text-center p-6">
-            <div class="text-3xl mb-2">📋</div>
-            <h3 class="text-lg font-semibold text-white mb-2">待审核节点</h3>
-            <p class="text-#666666 text-sm">查看并处理待审核的创作内容</p>
-          </div>
-        </n-card>
-        
-        <n-card 
-          class="bg-#2a2a2a border-#3a3a3a hover:bg-#3a3a3a transition-colors cursor-pointer"
-          @click="$router.push({ name: 'admin-books' })"
-        >
-          <div class="text-center p-6">
-            <div class="text-3xl mb-2">📚</div>
-            <h3 class="text-lg font-semibold text-white mb-2">故事册管理</h3>
-            <p class="text-#666666 text-sm">管理故事册状态和阶段</p>
-          </div>
-        </n-card>
-        
-        <n-card 
-          class="bg-#2a2a2a border-#3a3a3a hover:bg-#3a3a3a transition-colors cursor-pointer"
-          @click="$router.push({ name: 'admin-users' })"
-        >
-          <div class="text-center p-6">
-            <div class="text-3xl mb-2">👥</div>
-            <h3 class="text-lg font-semibold text-white mb-2">用户管理</h3>
-            <p class="text-#666666 text-sm">查看和管理用户账户</p>
-          </div>
-        </n-card>
-      </div>
-    </n-card>
-    
-    <!-- 最近活动 -->
-    <n-card class="bg-#1a1a1a border-#2a2a2a mt-8">
-      <template #header>
-        <h2 class="text-xl font-bold text-white">最近活动</h2>
-      </template>
-      
-      <div class="space-y-4">
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white">
-            📝
-          </div>
-          <div>
-            <p class="text-#d9d9d9">用户 "张三" 提交了新节点</p>
-            <p class="text-#666666 text-sm">2分钟前 · 待审核</p>
-          </div>
-        </div>
-        
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white">
-            ✅
-          </div>
-          <div>
-            <p class="text-#d9d9d9">节点 #1234 已通过审核</p>
-            <p class="text-#666666 text-sm">5分钟前 · 发布成功</p>
-          </div>
-        </div>
-        
-        <div class="flex items-start gap-3">
-          <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white">
-            ❌
-          </div>
-          <div>
-            <p class="text-#d9d9d9">节点 #5678 审核未通过</p>
-            <p class="text-#666666 text-sm">10分钟前 · 需要修改</p>
-          </div>
+        <div class="admin-hero__summary ui-panel-section">
+          <p class="admin-hero__summary-label">当前状态</p>
+          <p class="admin-hero__summary-value">
+            {{ stats?.nodes.pending ?? 0 }} 个待审核节点
+          </p>
+          <p class="admin-hero__summary-note">
+            {{ stats?.users.new_7d ?? 0 }} 位新用户 / {{ stats?.nodes.new_7d ?? 0 }} 个新节点（近 7 日）
+          </p>
         </div>
       </div>
-    </n-card>
+    </section>
+
+    <section class="ui-page-section ui-shell-panel">
+      <div class="ui-page-section__header">
+        <div>
+          <p class="ui-shell-kicker">Metrics</p>
+          <h2 class="ui-shell-title">运营概览</h2>
+          <p class="ui-page-section__lead">这些统计来自后端真实 `/admin/stats`，不再展示伪造的最近活动。</p>
+        </div>
+      </div>
+
+      <n-spin :show="isLoading">
+        <div class="admin-metric-grid">
+          <n-card
+            v-for="card in statCards"
+            :key="card.label"
+            class="ui-panel-section admin-metric-card"
+            :bordered="false"
+          >
+            <p class="admin-metric-card__label">{{ card.label }}</p>
+            <p class="admin-metric-card__value">{{ card.value }}</p>
+            <p class="admin-metric-card__hint">{{ card.hint }}</p>
+            <n-button
+              size="small"
+              type="primary"
+              @click="goToAdminRoute(card.routeName)"
+            >
+              {{ card.actionLabel }}
+            </n-button>
+          </n-card>
+        </div>
+      </n-spin>
+    </section>
+
+    <section class="ui-page-section ui-shell-panel">
+      <div class="ui-page-section__header">
+        <div>
+          <p class="ui-shell-kicker">Operations</p>
+          <h2 class="ui-shell-title">核心操作入口</h2>
+          <p class="ui-page-section__lead">后台优先服务三类任务：审核内容、维护故事册、管理用户。</p>
+        </div>
+      </div>
+
+      <div class="admin-operational-grid">
+        <article
+          v-for="card in operationalCards"
+          :key="card.title"
+          class="admin-operational-card ui-panel-section"
+        >
+          <h3 class="admin-operational-card__title">{{ card.title }}</h3>
+          <p class="admin-operational-card__summary">{{ card.summary }}</p>
+          <n-button
+            size="small"
+            type="primary"
+            @click="goToAdminRoute(card.routeName)"
+          >
+            打开页面
+          </n-button>
+        </article>
+      </div>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.admin-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+}
+
+.admin-hero {
+  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
+  align-items: start;
+}
+
+.admin-hero__summary {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+}
+
+.admin-hero__summary-label {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.admin-hero__summary-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+}
+
+.admin-hero__summary-note {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.admin-metric-grid,
+.admin-operational-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.admin-metric-card,
+.admin-operational-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.admin-metric-card__label {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.admin-metric-card__value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.admin-metric-card__hint,
+.admin-operational-card__summary {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.admin-operational-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+@media (max-width: 900px) {
+  .admin-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-page {
+    padding-inline: 12px;
+  }
+}
+</style>

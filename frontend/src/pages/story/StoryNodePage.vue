@@ -1,113 +1,126 @@
 <script setup lang="ts">
-import { NCard, NButton, NSpace, NTag, NSpin, NAvatar } from 'naive-ui'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { computed, ref } from 'vue'
-import type { Comment, StoryNodeRead, StoryNode } from '@/types/models'
-import { useQuery, useMutation } from '@tanstack/vue-query'
-import { del, get, post } from '@/services/http'
+import { NCard, NButton, NSpace, NTag, NSpin, NAvatar, NInput, NSelect } from 'naive-ui'
+import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMessage } from 'naive-ui'
+import { useAuditStoryNodeMutation } from '@/features/admin/queries'
+import { canCreateFromStoryNode, getStoryNodeCreationBlockedReason } from '@/features/story/creation'
+import { buildStoryWriteRoute } from '@/features/story/navigation'
+import StoryCreateConfirmModal from '@/components/story/StoryCreateConfirmModal.vue'
+import {
+  useDeleteStoryNodeMutation,
+  useNodeChildrenQuery,
+  useNodeDetailQuery,
+  useNodePathQuery,
+} from '@/features/story/queries'
+import {
+  useCreateCommentMutation,
+  useDeleteCommentMutation,
+  useNodeCommentsQuery,
+  useToggleLikeMutation,
+} from '@/features/interaction/queries'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const authStore = useAuthStore()
 const nodeId = computed(() => Number(route.params.nodeId))
+const justSubmitted = computed(() => route.query.submitted === '1')
 
-// 获取节点详情
-const { data: node, isLoading } = useQuery<StoryNodeRead>({
-  queryKey: ['story-node', nodeId],
-  queryFn: () => get<StoryNodeRead>(`/story/node/${nodeId.value}`),
-})
+const { data: node, isLoading } = useNodeDetailQuery(nodeId)
+const { data: path } = useNodePathQuery(nodeId)
+const { data: children } = useNodeChildrenQuery(nodeId, { limit: 5 })
+const { data: comments } = useNodeCommentsQuery(nodeId)
 
-// 获取阅读路径
-const { data: path } = useQuery<StoryNode[]>({
-  queryKey: ['node-path', nodeId],
-  queryFn: () => get<StoryNode[]>(`/story/node/${nodeId.value}/path`),
-})
-
-// 获取子分支
-const { data: children } = useQuery<StoryNodeRead[]>({
-  queryKey: ['node-children', nodeId],
-  queryFn: () => get<StoryNodeRead[]>(`/story/node?parent_id=${nodeId.value}&limit=5`),
-  enabled: !!node.value,
-})
-
-// 获取评论
-const { data: comments } = useQuery<Comment[]>({
-  queryKey: ['node-comments', nodeId],
-  queryFn: () => get<Comment[]>(`/interaction/node/${nodeId.value}/comments`),
-})
-
-// 点赞
-const { mutate: toggleLike, isPending: togglingLike } = useMutation({
-  mutationFn: () => post<{ action: string; likes_count: number }>(`/interaction/node/${nodeId.value}/like`),
-  onSuccess: (data) => {
-    message.success(data.action === 'like' ? '点赞成功' : '已取消点赞')
-  },
-})
+const { mutate: toggleLike, isPending: togglingLike } = useToggleLikeMutation()
 
 // 提交评论
 const commentContent = ref('')
-const { mutate: submitComment, isPending: submittingComment } = useMutation({
-  mutationFn: () => post(`/interaction/node/${nodeId.value}/comment`, { content: commentContent.value }),
-  onSuccess: () => {
-    message.success('评论成功')
-    commentContent.value = ''
-  },
-})
+const { mutate: submitComment, isPending: submittingComment } = useCreateCommentMutation()
 
 // 删除评论
-const { mutate: deleteComment, isPending: deletingComment } = useMutation({
-  mutationFn: (commentId: number) => del(`/interaction/node/${nodeId.value}/comment/${commentId}`),
-  onSuccess: (_, commentId) => {
-    message.success('评论已删除')
-    // 更新评论列表
-    if (comments.value) {
-      comments.value = comments.value.filter((comment) => comment.id !== commentId)
-    }
-  },
-})
+const { mutate: deleteComment, isPending: deletingComment } = useDeleteCommentMutation()
+const { mutate: deleteNode, isPending: deletingNode } = useDeleteStoryNodeMutation()
+const { mutate: auditNode, isPending: auditingNode } = useAuditStoryNodeMutation()
 
 function handleToggleLike() {
-  toggleLike()
+  toggleLike(
+    { nodeId: nodeId.value, bookId: node.value?.book_id },
+    {
+      onSuccess: (data) => {
+        message.success(data.action === 'liked' ? '点赞成功' : '已取消点赞')
+      },
+      onError: () => {
+        message.error('操作失败，请重试')
+      },
+    }
+  )
 }
 
 function handleSubmitComment() {
-  submitComment()
+  submitComment(
+    { nodeId: nodeId.value, payload: { content: commentContent.value } },
+    {
+      onSuccess: () => {
+        message.success('评论成功')
+        commentContent.value = ''
+      },
+      onError: () => {
+        message.error('评论失败，请重试')
+      },
+    }
+  )
 }
 
 function handleDeleteComment(commentId: number) {
-  deleteComment(commentId)
+  deleteComment(
+    { commentId, nodeId: nodeId.value },
+    {
+      onSuccess: () => {
+        message.success('评论已删除')
+      },
+      onError: () => {
+        message.error('删除失败，请重试')
+      },
+    }
+  )
 }
 
-// 处理续写
-function handleContinue() {
+const canCreateChild = computed(() => canCreateFromStoryNode(node.value))
+const creationBlockedReason = computed(() => getStoryNodeCreationBlockedReason(node.value))
+const isAdmin = computed(() => authStore.currentUser?.role === 'admin')
+const adminTargetStatus = ref<'published' | 'archived'>('published')
+const adminReason = ref('')
+const showCreateModal = ref(false)
+const adminStatusOptions = [
+  { label: '设为已发布', value: 'published' },
+  { label: '设为已归档', value: 'archived' },
+]
+
+watch(
+  () => node.value?.status,
+  (status) => {
+    adminTargetStatus.value = status === 'archived' ? 'published' : 'archived'
+    adminReason.value = ''
+  },
+  { immediate: true },
+)
+
+function handleCreateChildNode() {
   if (!authStore.isAuthenticated) {
-    router.push({ name: 'login', query: { redirect: route.fullPath } })
+    void router.push({ name: 'login', query: { redirect: route.fullPath } })
     return
   }
-  router.push({ name: 'story-write', params: { bookId: node.value?.book_id }, query: { parentId: nodeId.value, mode: 'continue' } })
+  showCreateModal.value = true
 }
 
-// 处理创建分支
-function handleBranch() {
-  if (!authStore.isAuthenticated) {
-    router.push({ name: 'login', query: { redirect: route.fullPath } })
-    return
-  }
-  router.push({ name: 'story-write', params: { bookId: node.value?.book_id }, query: { parentId: nodeId.value, mode: 'branch' } })
+function confirmCreateChildNode() {
+  if (!node.value) return
+  void router.push(buildStoryWriteRoute(node.value.book_id, nodeId.value))
 }
 
 // 处理编辑节点
-function handleEdit() {
-  if (!authStore.isAuthenticated) {
-    router.push({ name: 'login', query: { redirect: route.fullPath } })
-    return
-  }
-  router.push({ name: 'story-write', params: { bookId: node.value?.book_id }, query: { nodeId: nodeId.value, mode: 'edit' } })
-}
-
 // 处理删除节点
 function handleDelete() {
   if (!authStore.isAuthenticated) {
@@ -119,68 +132,161 @@ function handleDelete() {
     return
   }
 
-  void (async () => {
-    try {
-      await del(`/story/node/${nodeId.value}`)
-      message.success('节点删除成功')
-      router.push({ name: 'books' })
-    } catch (error) {
-      console.error('删除失败:', error)
-      message.error('删除失败，请重试')
+  deleteNode(
+    { nodeId: nodeId.value },
+    {
+      onSuccess: () => {
+        message.success('节点删除成功')
+        router.push({ name: 'books' })
+      },
+      onError: (error) => {
+        console.error('删除失败:', error)
+        message.error('删除失败，请重试')
+      },
     }
-  })()
+  )
+}
+
+function handleAdminStatusUpdate() {
+  if (!node.value) return
+
+  const payload =
+    adminTargetStatus.value === 'archived'
+      ? { status: 'archived' as const, reject_reason: adminReason.value.trim() || undefined }
+      : { status: 'published' as const }
+
+  auditNode(
+    {
+      nodeId: nodeId.value,
+      payload,
+    },
+    {
+      onSuccess: () => {
+        message.success(adminTargetStatus.value === 'published' ? '节点已发布' : '节点已归档')
+        if (adminTargetStatus.value === 'archived') {
+          adminReason.value = ''
+        }
+      },
+      onError: () => {
+        message.error('状态更新失败，请重试')
+      },
+    },
+  )
 }
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-4 py-8">
+  <div class="story-node-page">
     <n-spin :show="isLoading">
-      <!-- 路径导航 -->
       <story-branch-path v-if="path && path.length > 0" :path="path" />
 
-      <!-- 节点元信息 -->
-      <n-card v-if="node" class="bg-#1a1a1a border-#2a2a2a mb-6">
-        <div class="flex justify-between items-start mb-4">
+      <n-card v-if="node" class="story-node-panel ui-shell-panel mb-6" :bordered="false">
+        <div class="story-node-head">
           <div>
-            <h1 class="text-2xl font-bold text-white mb-2">
+            <p class="ui-shell-kicker">Node Record</p>
+            <h1 class="ui-shell-title story-node-title">
               {{ node.title ?? node.branch_name ?? '无标题' }}
             </h1>
-            <div class="flex items-center gap-4 text-#666666">
+            <div class="story-node-meta">
               <n-avatar 
                 :size="32" 
                 :src="node.author?.avatar ?? undefined"
               >
                 {{ node.author?.username?.charAt(0).toUpperCase() ?? '' }}
               </n-avatar>
-              <span>{{ node.author?.username ?? '系统' }}</span>
-              <span>{{ new Date(node.created_at).toLocaleDateString('zh-CN') }}</span>
+              <span class="story-node-meta__item">{{ node.author?.username ?? '系统' }}</span>
+              <span class="story-node-meta__item">{{ new Date(node.created_at).toLocaleDateString('zh-CN') }}</span>
             </div>
           </div>
           <n-tag :type="node.status === 'published' ? 'success' : 'warning'">
             {{ node.status }}
           </n-tag>
         </div>
+
+        <div class="story-node-actions">
+          <n-button
+            size="small"
+            @click="router.push({ name: 'book-detail', params: { bookId: node.book_id }, query: { focusNodeId: node.id } })"
+          >
+            返回故事树
+          </n-button>
+        </div>
+
+        <div
+          v-if="justSubmitted && node.status === 'pending'"
+          class="story-node-notice story-node-notice--pending"
+        >
+          您的投稿已提交成功，当前处于待审核状态。审核通过后，这个节点会对其他读者公开可见。
+        </div>
+
+        <div
+          v-else-if="node.status === 'pending'"
+          class="story-node-notice story-node-notice--pending"
+        >
+          该节点正在审核中，目前仅作者本人和管理员可见。
+        </div>
+
+        <div
+          v-else-if="node.status === 'archived'"
+          class="story-node-notice story-node-notice--archived"
+        >
+          <p>该节点已归档，普通读者不可见。</p>
+          <p v-if="node.reject_reason || node.archived_reason" class="mt-2">
+            原因：{{ node.reject_reason || node.archived_reason }}
+          </p>
+        </div>
+
+        <div v-if="isAdmin" class="story-node-admin-panel">
+          <div class="story-node-admin-toolbar">
+            <div class="story-node-admin-toolbar__meta">
+              <p class="ui-shell-kicker">Admin</p>
+              <div class="story-node-admin-toolbar__status">
+                <span class="story-node-admin-toolbar__label">当前状态</span>
+                <n-tag size="small" :type="node.status === 'published' ? 'success' : node.status === 'archived' ? 'error' : 'warning'">
+                  {{ node.status }}
+                </n-tag>
+              </div>
+            </div>
+
+            <div class="story-node-admin-toolbar__controls">
+              <n-select
+                v-model:value="adminTargetStatus"
+                size="small"
+                class="story-node-admin-toolbar__select"
+                :options="adminStatusOptions"
+              />
+              <n-button
+                size="small"
+                type="primary"
+                :loading="auditingNode"
+                :disabled="auditingNode || adminTargetStatus === node.status"
+                @click="handleAdminStatusUpdate"
+              >
+                应用
+              </n-button>
+            </div>
+          </div>
+
+          <div v-if="adminTargetStatus === 'archived'" class="story-node-admin-toolbar__reason">
+            <n-input
+              v-model:value="adminReason"
+              size="small"
+              type="textarea"
+              :autosize="{ minRows: 2, maxRows: 3 }"
+              placeholder="归档原因，可选"
+            />
+          </div>
+        </div>
         
-        <!-- 操作按钮 -->
-        <nspace class="mb-4">
-            <n-button type="primary" @click="handleToggleLike" :loading="togglingLike && node?.id === nodeId">
+        <n-space class="story-node-actions">
+          <n-button type="primary" @click="handleToggleLike" :loading="togglingLike && node?.id === nodeId">
             👍 {{ node.likes_count ?? 0 }} 赞
           </n-button>
-          <n-button @click="handleContinue">
-            ✍️ 沿此续写
-          </n-button>
-          <n-button @click="handleBranch">
-            🌿 创建分支
+          <n-button @click="handleCreateChildNode" :disabled="!canCreateChild">
+            创建后续节点
           </n-button>
           
           <!-- 编辑和删除按钮（仅作者可见） -->
-          <n-button 
-            v-if="authStore.currentUser?.id === node.author?.id" 
-            type="default" 
-            @click="handleEdit"
-          >
-            ✏️ 编辑
-          </n-button>
           <n-button 
             v-if="authStore.currentUser?.id === node.author?.id" 
             type="error" 
@@ -188,27 +294,29 @@ function handleDelete() {
           >
             ❌ 删除
           </n-button>
-        </nspace>
+        </n-space>
+
+        <p v-if="creationBlockedReason" class="story-node-muted">
+          {{ creationBlockedReason }}
+        </p>
       </n-card>
 
-      <!-- 正文内容 -->
-      <n-card v-if="node?.content" class="bg-#1a1a1a border-#2a2a2a mb-6">
-        <div class="prose prose-invert max-w-none text-#d9d9d9 leading-relaxed whitespace-pre-wrap">
+      <n-card v-if="node?.content" class="story-node-reading ui-shell-panel mb-6" :bordered="false">
+        <div class="story-node-reading__body">
           {{ node.content }}
         </div>
       </n-card>
 
-      <!-- 子分支列表 -->
-      <n-card v-if="children && children.length > 0" class="bg-#1a1a1a border-#2a2a2a">
+      <n-card v-if="children && children.length > 0" class="ui-shell-panel" :bordered="false">
         <template #header>
-          <h2 class="text-xl font-bold text-white">子分支（{{ children.length }}）</h2>
+          <h2 class="ui-shell-title story-node-section-title">子分支（{{ children.length }}）</h2>
         </template>
         
         <div class="space-y-4">
           <div 
             v-for="child in children" 
             :key="child.id" 
-            class="border-b border-#2a2a2a pb-4 last:border-b-0 last:pb-0 hover:bg-#2a2a2a transition-colors cursor-pointer"
+            class="story-node-child"
             @click="$router.push({ name: 'story-node', params: { nodeId: child.id } })"
           >
             <div class="flex items-center gap-3">
@@ -219,16 +327,16 @@ function handleDelete() {
                 {{ child.author?.username?.charAt(0).toUpperCase() }}
               </n-avatar>
               <div class="flex-1 min-w-0">
-                <h3 class="text-lg font-semibold text-white">{{ child.title || child.branch_name || '无标题' }}</h3>
-                <p class="text-#666666 text-sm line-clamp-2">
-                  {{ child.content?.substring(0, 100) }}{{ child.content?.length > 100 ? '...' : '' }}
+                <h3 class="story-node-child__title">{{ child.title || child.branch_name || '无标题' }}</h3>
+                <p class="story-node-child__summary">
+                  {{ child.summary || '这个分支还没有补充摘要，点击查看正文。' }}
                 </p>
-                <div class="flex items-center gap-2 text-#666666 text-xs mt-2">
-                  <span>{{ new Date(child.created_at).toLocaleDateString('zh-CN') }}</span>
-                  <span>{{ child.status }}</span>
-                  <span>{{ child.likes_count }} 赞</span>
-                  <span>{{ child.comments_count }} 评论</span>
-                  <span>{{ child.children_count }} 分支</span>
+                <div class="story-node-child__meta">
+                  <span class="story-node-child__meta-item">{{ new Date(child.created_at).toLocaleDateString('zh-CN') }}</span>
+                  <span class="story-node-child__meta-item">{{ child.status }}</span>
+                  <span class="story-node-child__meta-item">{{ child.likes_count }} 赞</span>
+                  <span class="story-node-child__meta-item">{{ child.comments_count }} 评论</span>
+                  <span class="story-node-child__meta-item">{{ child.children_count }} 分支</span>
                 </div>
               </div>
             </div>
@@ -236,38 +344,35 @@ function handleDelete() {
         </div>
       </n-card>
       
-      <!-- 子分支空状态 -->
-      <n-card v-if="node && (!children || children.length === 0)" class="bg-#1a1a1a border-#2a2a2a">
+      <n-card v-if="node && (!children || children.length === 0)" class="ui-shell-panel" :bordered="false">
         <template #header>
-          <h2 class="text-xl font-bold text-white">子分支（{{ children?.length || 0 }}）</h2>
+          <h2 class="ui-shell-title story-node-section-title">子分支（{{ children?.length || 0 }}）</h2>
         </template>
         
-        <div class="text-center py-12">
-          <p class="text-#666666">暂无子分支，成为第一个创建者！</p>
+        <div class="story-node-empty">
+          <p class="story-node-muted">暂无子分支，成为第一个创建者。</p>
           
           <div class="mt-4">
             <n-button 
               type="primary" 
               size="large" 
-              @click="handleBranch"
+              @click="handleCreateChildNode"
             >
-              开始创建新分支
+              开始创建后续节点
             </n-button>
           </div>
         </div>
       </n-card>
       
-      <!-- 评论区 -->
-      <n-card class="bg-#1a1a1a border-#2a2a2a">
+      <n-card class="ui-shell-panel" :bordered="false">
         <template #header>
-          <h2 class="text-xl font-bold text-white">评论区（{{ comments?.length || 0 }}）</h2>
+          <h2 class="ui-shell-title story-node-section-title">评论区（{{ comments?.length || 0 }}）</h2>
         </template>
         
-        <!-- 发表评论 -->
-        <div v-if="authStore.isAuthenticated" class="mb-6">
+        <div v-if="authStore.isAuthenticated" class="story-node-comment-form">
           <textarea 
             v-model="commentContent" 
-            class="w-full bg-#2a2a2a border border-#2a2a2a rounded-lg px-4 py-2 text-white placeholder-#666666 focus:border-#8b5cf6 focus:outline-none h-24"
+            class="story-node-comment-input"
             placeholder="写下您的评论..."
           ></textarea>
           <div class="mt-4">
@@ -282,17 +387,15 @@ function handleDelete() {
           </div>
         </div>
         
-        <!-- 登录提示 -->
-        <div v-else class="mb-6 text-#666666">
+        <div v-else class="story-node-muted">
           请登录后发表评论
         </div>
         
-        <!-- 评论列表 -->
         <div v-if="comments && comments.length > 0" class="space-y-4">
           <div 
             v-for="comment in comments" 
             :key="comment.id" 
-            class="border-b border-#2a2a2a pb-4 last:border-b-0 last:pb-0 flex items-start gap-3"
+            class="story-node-comment"
           >
             <n-avatar 
               :size="24" 
@@ -302,10 +405,9 @@ function handleDelete() {
               {{ comment.user?.username?.charAt(0).toUpperCase() }}
             </n-avatar>
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="font-medium text-white">{{ comment.user?.username }}</span>
-                <span class="text-#666666 text-sm">{{ new Date(comment.created_at).toLocaleDateString('zh-CN') }}</span>
-                <!-- 删除按钮（仅评论作者可见） -->
+              <div class="story-node-comment__meta">
+                <span class="story-node-comment__author">{{ comment.user?.username }}</span>
+                <span class="story-node-comment__time">{{ new Date(comment.created_at).toLocaleDateString('zh-CN') }}</span>
                 <n-button 
                   v-if="authStore.currentUser?.id === comment.user?.id" 
                   size="small" 
@@ -318,14 +420,13 @@ function handleDelete() {
                 </n-button>
               </div>
               
-              <p class="text-#d9d9d9 mt-2">{{ comment.content }}</p>
+              <p class="story-node-comment__content">{{ comment.content }}</p>
             </div>
           </div>
         </div>
         
-        <!-- 评论空状态 -->
-        <div v-else class="text-center py-12">
-          <p class="text-#666666">暂无评论</p>
+        <div v-else class="story-node-empty">
+          <p class="story-node-muted">暂无评论</p>
           
           <div class="mt-4">
             <n-button 
@@ -339,6 +440,260 @@ function handleDelete() {
           </div>
         </div>
       </n-card>
+
+      <story-create-confirm-modal
+        v-if="node"
+        v-model:show="showCreateModal"
+        :book-title="null"
+        :parent-node="node"
+        @confirm="confirmCreateChildNode"
+      />
     </n-spin>
   </div>
 </template>
+
+<style scoped>
+.story-node-page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+.story-node-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.story-node-section-title {
+  margin: 8px 0 0;
+  letter-spacing: 0.05em;
+}
+
+.story-node-title {
+  margin-top: 6px;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.story-node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-muted);
+}
+
+.story-node-meta__item {
+  letter-spacing: 0.04em;
+}
+
+.story-node-actions {
+  margin-bottom: 16px;
+}
+
+.story-node-notice {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.story-node-notice--pending {
+  background: rgba(215, 201, 134, 0.08);
+  color: #ebe2b3;
+  border-color: rgba(215, 201, 134, 0.28);
+}
+
+.story-node-notice--archived {
+  background: rgba(210, 143, 143, 0.08);
+  color: #efcccc;
+  border-color: rgba(210, 143, 143, 0.28);
+}
+
+.story-node-admin-panel {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.story-node-admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.story-node-admin-toolbar__meta {
+  display: grid;
+  gap: 8px;
+}
+
+.story-node-admin-toolbar__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.story-node-admin-toolbar__label {
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.story-node-admin-toolbar__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.story-node-admin-toolbar__select {
+  width: 140px;
+}
+
+.story-node-admin-toolbar__reason {
+  margin-top: 10px;
+}
+
+@media (max-width: 720px) {
+  .story-node-admin-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .story-node-admin-toolbar__controls {
+    width: 100%;
+  }
+
+  .story-node-admin-toolbar__select {
+    flex: 1;
+    width: auto;
+  }
+}
+
+.story-node-reading__body {
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  line-height: 2;
+  font-size: 16px;
+}
+
+.story-node-child__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.story-node-child {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-faint);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.story-node-child:last-child {
+  border-bottom: none;
+}
+
+.story-node-child:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.story-node-child__summary {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.story-node-child__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.story-node-child__meta-item {
+  white-space: nowrap;
+}
+
+.story-node-empty {
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.story-node-muted {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.story-node-comment-form {
+  margin-bottom: 24px;
+}
+
+.story-node-comment-input {
+  width: 100%;
+  min-height: 112px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-primary);
+  outline: none;
+  resize: vertical;
+}
+
+.story-node-comment-input:focus {
+  border-color: var(--line-strong);
+  box-shadow: var(--glow-focus);
+}
+
+.story-node-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-faint);
+}
+
+.story-node-comment:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.story-node-comment__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.story-node-comment__author {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.story-node-comment__time {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.story-node-comment__content {
+  margin-top: 8px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  line-height: 1.8;
+}
+</style>

@@ -67,14 +67,14 @@ async def read_users_me(
     # 2. 统计数据
 
     # 用户发布过的节点总数
-    nodes_count = select(
-        func.count(StoryNode.id)
+    nodes_count = (
+        select(func.count(StoryNode.id))
         .where(StoryNode.author_id == user.id)
     )
     nodes_count = (await db.execute(nodes_count)).scalar() or 0
     # 用户收到的点赞总数
-    likes_count = select(
-        func.count(NodeLike.user_id)
+    likes_count = (
+        select(func.count(NodeLike.user_id))
         .select_from(NodeLike)
         .join(StoryNode, NodeLike.node_id == StoryNode.id)
         .where(StoryNode.author_id == user.id)
@@ -89,7 +89,6 @@ async def read_users_me(
         avatar=user.avatar,
         role=user.role,
         is_active=user.is_active,
-        is_verified=user.is_verified,
         created_at=user.created_at,
         updated_at=user.updated_at,
         nodes_count=nodes_count,

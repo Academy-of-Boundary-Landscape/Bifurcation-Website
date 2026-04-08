@@ -1,6 +1,8 @@
 import os
 from typing import Optional
 
+from pydantic import field_validator
+from pydantic.config import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -11,7 +13,24 @@ def _resolve_database_url() -> str:
     return os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:password@localhost:5432/tree_story_db")
 
 
+def _resolve_cors_origins() -> list[str]:
+    raw_value = os.getenv("CORS_ORIGINS", "").strip()
+    if raw_value:
+        return [item.strip() for item in raw_value.split(",") if item.strip()]
+    return [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
+
+
 class Settings(BaseSettings):
+    model_config = ConfigDict(
+        env_file=".env",
+        extra="ignore",
+    )
+
     PROJECT_NAME: str = "Tree Story Project"
     API_V1_STR: str = "/api/v1"
     
@@ -21,6 +40,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SECRET_KEY", "GANGWAY")  # 请在生产环境中使用更安全的密钥
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 天过期
+    SQL_ECHO: bool = os.getenv("SQL_ECHO", "false").lower() in {"1", "true", "yes", "on"}
 
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "admin@example.com")
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
@@ -42,19 +62,29 @@ class Settings(BaseSettings):
     CASDOOR_AUDIENCE: Optional[str] = os.getenv("CASDOOR_AUDIENCE") or None
     SSO_STATE_EXPIRE_MINUTES: int = int(os.getenv("SSO_STATE_EXPIRE_MINUTES", "10"))
     SSO_AUTO_LINK_BY_EMAIL: bool = os.getenv("SSO_AUTO_LINK_BY_EMAIL", "true").lower() in {"1", "true", "yes", "on"}
-    SSO_ADMIN_CLAIM_KEYS: str = os.getenv("SSO_ADMIN_CLAIM_KEYS", "roles,role,groups")
+    SSO_ADMIN_CLAIM_KEYS: str = os.getenv("SSO_ADMIN_CLAIM_KEYS", "roles,role")
     SSO_ADMIN_MATCH_VALUES: str = os.getenv("SSO_ADMIN_MATCH_VALUES", "admin,administrator")
 
     # CORS 配置
-    CORS_ORIGINS: list = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ]
+    CORS_ORIGINS: list[str] = _resolve_cors_origins()
 
-    class Config:
-        env_file = ".env"
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: object) -> list[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            raw_value = value.strip()
+            if not raw_value:
+                return []
+            if raw_value.startswith("["):
+                import json
+
+                parsed = json.loads(raw_value)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+            return [item.strip() for item in raw_value.split(",") if item.strip()]
+        return _resolve_cors_origins()
 
     @property
     def casdoor_authorize_url(self) -> str:
@@ -70,11 +100,21 @@ class Settings(BaseSettings):
 
     @property
     def casdoor_jwks_url(self) -> str:
-        return self.CASDOOR_JWKS_URL or f"{self.CASDOOR_BASE_URL.rstrip('/')}/.well-known/jwks.json"
+        base_url = self.CASDOOR_BASE_URL.rstrip("/")
+        if self.CASDOOR_JWKS_URL:
+            return self.CASDOOR_JWKS_URL
+        if self.CASDOOR_APPLICATION_NAME:
+            return f"{base_url}/.well-known/{self.CASDOOR_APPLICATION_NAME}/jwks"
+        return f"{base_url}/.well-known/jwks"
 
     @property
     def casdoor_issuer(self) -> str:
-        return self.CASDOOR_ISSUER or self.CASDOOR_BASE_URL.rstrip("/")
+        base_url = self.CASDOOR_BASE_URL.rstrip("/")
+        if self.CASDOOR_ISSUER:
+            return self.CASDOOR_ISSUER
+        if self.CASDOOR_APPLICATION_NAME:
+            return f"{base_url}/.well-known/{self.CASDOOR_APPLICATION_NAME}"
+        return base_url
 
     @property
     def casdoor_audience(self) -> str:

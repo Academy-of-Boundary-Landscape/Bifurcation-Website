@@ -1,5 +1,7 @@
 # Casdoor SSO 登录迁移评审与实施方案
 
+> 说明：这份文档主要保留迁移背景、历史评审和后续规划。其中第 2、7、9 节包含迁移前状态与未完成项，不应直接视为当前代码现状。当前实现请优先以 `backend-setup.md`、`backend-api.md`、`backend-features.md` 为准。
+
 ## 1. 结论
 
 当前后端不适合直接切成“纯第三方 token 驱动”的模式，原因是业务代码广泛依赖本地 `users` 表和本地 `User.id`。
@@ -125,7 +127,6 @@
 - `email` 保留，来自 Casdoor 用户资料同步
 - `username` 保留，作为站内唯一名；首次登录时自动生成，之后允许站内修改
 - `hashed_password` 改为允许为空
-- `is_verified` 可在 Casdoor 邮箱已验证时同步为 `True`
 - `last_login_at` 在每次 SSO 成功后更新
 
 ## 7. 后端改造清单
@@ -207,7 +208,6 @@ CASDOOR_AUDIENCE=
 - `email`
 - `display_name`
 - `avatar`
-- `is_verified`
 - `last_login_at`
 
 不建议每次覆盖：

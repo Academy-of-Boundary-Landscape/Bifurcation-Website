@@ -5,7 +5,7 @@ import type { StoryNodeCreate } from '@/types/models'
 
 const props = defineProps<{
   modelValue: StoryNodeCreate
-  mode: 'continue' | 'branch'
+  mode?: 'create'
 }>()
 
 const emits = defineEmits(['update:modelValue', 'submit', 'cancel'])
@@ -43,16 +43,15 @@ function handleSubmit() {
   <n-card class="bg-#1a1a1a border-#2a2a2a">
     <template #header>
       <h2 class="text-xl font-bold text-white">
-        {{ mode === 'continue' ? '续写创作' : '新分支创作' }}
+        创建后续节点
       </h2>
       <p class="text-#666666 text-sm mt-1">
-        {{ mode === 'continue' ? '在现有节点上进行延续创作' : '从当前节点开启新的世界线分支' }}
+        从当前节点继续创作新的后续内容，分支名称只是可选补充信息。
       </p>
     </template>
     
     <n-form :model="formData" :show-feedback="true">
-      <!-- 分支名称（仅分支模式） -->
-      <n-form-item v-if="mode === 'branch'" label="分支名称" required>
+      <n-form-item label="分支名称（可选）">
         <n-input 
           v-model:value="formData.branch_name" 
           placeholder="例如：平行世界的相遇"
@@ -104,7 +103,7 @@ function handleSubmit() {
         取消
       </n-button>
       <n-button type="primary" @click="handleSubmit">
-        {{ mode === 'continue' ? '提交续写' : '提交分支创作' }}
+        提交后续节点
       </n-button>
     </div>
   </n-card>

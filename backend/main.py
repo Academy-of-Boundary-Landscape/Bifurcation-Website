@@ -1,4 +1,6 @@
 # main.py
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -67,4 +69,8 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8057)
+    uvicorn.run(
+        app,
+        host=os.getenv("BACKEND_HOST", "0.0.0.0"),
+        port=int(os.getenv("BACKEND_PORT", "8057")),
+    )

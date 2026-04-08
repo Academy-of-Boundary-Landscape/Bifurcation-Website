@@ -53,6 +53,7 @@ pip install -r requirements.txt
 CASDOOR_BASE_URL=https://auth.secret-sealing.club
 CASDOOR_CLIENT_ID=
 CASDOOR_CLIENT_SECRET=
+CASDOOR_APPLICATION_NAME=
 CASDOOR_REDIRECT_URI=
 CASDOOR_SCOPE=openid profile email
 CASDOOR_AUTHORIZE_URL=
@@ -63,8 +64,20 @@ CASDOOR_ISSUER=
 CASDOOR_AUDIENCE=
 SSO_STATE_EXPIRE_MINUTES=10
 SSO_AUTO_LINK_BY_EMAIL=true
-SSO_ADMIN_CLAIM_KEYS=roles,role,groups
+SSO_ADMIN_CLAIM_KEYS=roles,role
 SSO_ADMIN_MATCH_VALUES=admin,administrator
+```
+
+另外，如果你不想在开发时看到大量 SQLAlchemy / SQLite 原始 SQL 日志，可以设置：
+
+```env
+SQL_ECHO=false
+```
+
+需要临时排查数据库行为时，再改成：
+
+```env
+SQL_ECHO=true
 ```
 
 最少必须补齐：
@@ -83,17 +96,40 @@ CASDOOR_REDIRECT_URI=https://你的前端域名/auth/callback
 
 具体配置方法和 Casdoor / 上游 Provider callback 的区别，见 `docs/casdoor-callback-setup.md`。
 
+说明：
+
+- 如果不手动覆盖 `CASDOOR_JWKS_URL` / `CASDOOR_ISSUER`，后端现在会优先按 `CASDOOR_APPLICATION_NAME` 推导 Casdoor 的 application-specific OIDC 路径
+- 没填 `CASDOOR_APPLICATION_NAME` 时，才会回退到 Casdoor 的全局 `issuer` / `jwks` 路径
+
 如果你希望新用户首次通过 Casdoor 登录时自动成为本站管理员，还需要补充：
 
 - `SSO_ADMIN_CLAIM_KEYS`
-  - 后端会依次检查这些 claim，例如 `roles`、`role`、`groups`
+  - 后端会依次检查这些 claim，当前建议直接使用 `roles`，兼容保留 `role`
 - `SSO_ADMIN_MATCH_VALUES`
   - 只要 claim 值里包含这些标记之一，就把新建本地用户初始化为 `admin`
 
+当前建议：
+
+- 在 Casdoor 里给管理员用户分配角色，例如 `admin`
+- 确保该角色会出现在 token / userinfo 的 `roles` claim 中
+- 后端 `.env` 使用：
+
+```env
+SSO_ADMIN_CLAIM_KEYS=roles,role
+SSO_ADMIN_MATCH_VALUES=admin,administrator
+```
+
+不建议默认依赖 `groups`：
+
+- 目前项目后端的管理员判断只需要一个稳定的“是否管理员”信号
+- Casdoor 官方文档更明确的概念是 token claims、roles、permissions
+- 对这个站点来说，用角色判断后台权限比用权限列表或自定义组字段更直接、更易维护
+
 注意：
 
-- 这个规则只作用于“首次创建本地用户”
-- 既有本地用户的 `role` 不会在后续登录时被 Casdoor 自动覆盖
+- 新建用户会按这些 claim 初始化角色
+- 后续 SSO 登录时，后端也会继续按 claim 同步 `admin/writer` 角色
+- `banned` 仍由本站本地控制，不会被 Casdoor 自动解除封禁
 
 ## 5. 数据库补列脚本
 
@@ -124,7 +160,7 @@ python scripts/migrate_add_sso_columns.py
 
 1. 激活 `backend/venv`
 2. 检查 `.env` 是否补齐数据库与 Casdoor 配置
-3. 设置管理员 SSO 绑定信息：
+3. 如果你确实要预绑定一个管理员账号，再设置管理员 SSO 绑定信息：
 
 ```env
 ADMIN_EMAIL=admin@example.com
@@ -136,13 +172,20 @@ ADMIN_AUTH_USER_ID=
 
 4. 如果是全新库，运行 `python init_database.py`
 5. 如果是旧库，运行 `python scripts/migrate_add_sso_columns.py`
-6. 启动 `python main.py`
-7. 访问 `/health`
-8. 前端发起 `/api/v1/auth/sso/login-url`
+6. 按需设置 `BACKEND_HOST` / `BACKEND_PORT`，例如测试环境可设为 `8401`
+7. 启动 `python main.py`
+8. 访问 `/health`
+9. 前端发起 `/api/v1/auth/sso/login-url`
+
+说明：
+
+- `init_database.py` 只会在显式提供 `ADMIN_AUTH_SUBJECT` 时预创建管理员账号
+- 如果未提供 `ADMIN_AUTH_SUBJECT`，初始化脚本会跳过管理员预创建
+- 当前推荐方式是让 Casdoor 中带管理员 claim 的用户首次登录，由 SSO 同步逻辑自动创建或同步为本地管理员
 
 ## 7. 当前注意事项
 
 - 日常业务接口仍然依赖本站本地 JWT
 - 对外认证入口已经收敛为 SSO，不再提供本地密码 API
-- 初始化脚本现在会直接创建一个绑定 SSO subject 的管理员账号
+- 初始化脚本默认不会强制创建管理员账号；管理员通常来自 Casdoor 登录时的 claim 同步
 - `docs/` 才是当前有效文档来源，`backend` 目录内旧文档已清理

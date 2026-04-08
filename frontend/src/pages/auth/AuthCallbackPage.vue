@@ -18,6 +18,14 @@ async function finishSsoLogin() {
   const state = typeof route.query.state === 'string' ? route.query.state : ''
   const oauthError = typeof route.query.error === 'string' ? route.query.error : ''
 
+  console.info('[SSO] auth callback page loaded', {
+    href: window.location.href,
+    origin: window.location.origin,
+    hasCode: !!code,
+    hasState: !!state,
+    oauthError,
+  })
+
   if (oauthError) {
     errorMessage.value = `SSO 登录失败: ${oauthError}`
     loading.value = false
@@ -34,8 +42,13 @@ async function finishSsoLogin() {
     const response = await authStore.exchangeSsoCode(code, state)
     router.replace(response.redirect_to || '/books')
   } catch (error) {
-    handleError(error, '登录交换失败，请稍后重试')
-    errorMessage.value = '登录交换失败，请稍后重试'
+    handleError(error)
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+      const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      errorMessage.value = detail || '登录交换失败，请稍后重试'
+    } else {
+      errorMessage.value = error instanceof Error ? error.message : '登录交换失败，请稍后重试'
+    }
     loading.value = false
   }
 }

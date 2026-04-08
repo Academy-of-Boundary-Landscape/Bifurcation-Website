@@ -15,7 +15,7 @@ from app.models.interaction import Notification, NotificationType
 from app.schemas import story as node_schema
 from app.schemas import user as user_schema
 from app.schemas import common as common_schema
-from app.utils.notification import send_notification
+from app.services.story_nodes import audit_story_node_record
 
 router = APIRouter()
 
@@ -23,6 +23,56 @@ router = APIRouter()
 # ==========================================
 # 🛡️ 节点审核管理 (Audit)
 # ==========================================
+
+@router.get(
+    "/nodes",
+    response_model=List[node_schema.StoryNodeRead],
+    summary="[Admin] 获取节点列表",
+    responses={
+        200: {"description": "获取成功"},
+        401: {"model": common_schema.ErrorResponse, "description": "未认证"},
+        403: {"model": common_schema.ErrorResponse, "description": "权限不足"},
+        422: {"model": common_schema.ValidationErrorResponse, "description": "参数校验失败"},
+    },
+)
+async def admin_list_nodes(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    status: NodeStatus | None = Query(None, description="按节点状态筛选"),
+    book_id: int | None = Query(None, ge=1, description="按故事册筛选"),
+    author_id: int | None = Query(None, ge=1, description="按作者筛选"),
+    keyword: str | None = Query(None, min_length=1, max_length=80, description="标题/分支名/摘要关键词"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(deps.get_current_admin),
+) -> Any:
+    stmt = (
+        select(StoryNode)
+        .options(selectinload(StoryNode.author))
+        .order_by(desc(StoryNode.created_at))
+    )
+
+    if status is not None:
+        stmt = stmt.where(StoryNode.status == status)
+
+    if book_id is not None:
+        stmt = stmt.where(StoryNode.book_id == book_id)
+
+    if author_id is not None:
+        stmt = stmt.where(StoryNode.author_id == author_id)
+
+    if keyword:
+        q = keyword.strip()
+        stmt = stmt.where(
+            or_(
+                StoryNode.title.ilike(f"%{q}%"),
+                StoryNode.branch_name.ilike(f"%{q}%"),
+                StoryNode.summary.ilike(f"%{q}%"),
+            )
+        )
+
+    result = await db.execute(stmt.offset(skip).limit(limit))
+    return result.scalars().all()
+
 
 @router.get(
     "/nodes/pending",
@@ -74,68 +124,12 @@ async def audit_node(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_admin),
 ) -> Any:
-    # 1. 查节点
-    node = await db.get(StoryNode, node_id)
-    if not node:
-        raise HTTPException(status_code=404, detail="节点不存在")
-    if audit_in.status == NodeStatus.PENDING:
-        raise HTTPException(status_code=400, detail="审核接口不支持将节点设为 pending")
-
-    old_status = node.status
-    now = datetime.now(timezone.utc)
-
-    # 2. 修改状态
-    node.status = audit_in.status
-    node.reviewed_by = current_user.id
-    node.reviewed_at = now
-
-    # 3. 根据状态设置额外字段
-    if audit_in.status == NodeStatus.PUBLISHED:
-        node.published_at = now
-        node.visibility = NodeVisibility.PUBLIC
-        node.archived_at = None
-        node.archived_reason = None
-        node.reject_reason = None
-        notification_type = NotificationType.APPROVED
-        notification_message = None
-    elif audit_in.status == NodeStatus.ARCHIVED:
-        node.visibility = NodeVisibility.PRIVATE
-        node.archived_at = now
-        node.reject_reason = audit_in.reject_reason
-        node.archived_reason = audit_in.reject_reason or "管理员归档"
-        notification_type = NotificationType.REJECTED
-        notification_message = audit_in.reject_reason
-    else:
-        # PENDING 状态通常不会在审核时设置，但保留兼容
-        notification_type = None
-        notification_message = None
-
-    # 4. 发送通知（状态变化时）
-    if old_status != audit_in.status and notification_type:
-        await send_notification(
-            db=db,
-            receiver_id=node.author_id,
-            sender_id=current_user.id,
-            type=notification_type,
-            node_id=node.id,
-            book_id=node.book_id,
-            message=notification_message,
-        )
-
-    db.add(node)
-    await db.commit()
-    await db.refresh(node)
-
-    # 预加载 author
-    node = (
-        await db.execute(
-            select(StoryNode)
-            .options(selectinload(StoryNode.author))
-            .where(StoryNode.id == node_id)
-        )
-    ).scalars().first()
-
-    return node
+    return await audit_story_node_record(
+        db=db,
+        current_user=current_user,
+        node_id=node_id,
+        audit_in=audit_in,
+    )
 
 
 # ==========================================

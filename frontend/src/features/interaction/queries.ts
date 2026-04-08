@@ -1,9 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type {
-  Comment,
   CommentCreate,
-  Notification,
-  LikeToggleResponse
 } from '@/types/models'
 import {
   toggleLike,
@@ -11,31 +9,37 @@ import {
   createComment,
   deleteComment,
   fetchNotifications,
+  markNotificationAsRead,
   markAllNotificationsAsRead,
   fetchUnreadCount
 } from './api'
+import { queryKeys } from '@/features/queryKeys'
 
 // 点赞相关 Queries
 export function useToggleLikeMutation() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (nodeId: number) => toggleLike(nodeId),
-    onSuccess: (data, nodeId) => {
-      // 更新节点详情缓存
-      queryClient.invalidateQueries({ queryKey: ['node-detail', nodeId] })
-      queryClient.invalidateQueries({ queryKey: ['story-tree'] })
-      queryClient.invalidateQueries({ queryKey: ['node-comments', nodeId] })
+    mutationFn: ({ nodeId, bookId }: { nodeId: number; bookId?: number }) => toggleLike(nodeId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.storyNode(variables.nodeId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.nodeComments(variables.nodeId) })
+
+      if (variables.bookId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.storyTree(variables.bookId) })
+      } else {
+        queryClient.invalidateQueries({ queryKey: queryKeys.storyTreesRoot() })
+      }
     }
   })
 }
 
 // 评论相关 Queries
-export function useNodeCommentsQuery(nodeId: number, params?: { skip?: number; limit?: number }) {
+export function useNodeCommentsQuery(nodeId: MaybeRefOrGetter<number>, params?: { skip?: number; limit?: number }) {
   return useQuery({
-    queryKey: ['node-comments', nodeId, params],
-    queryFn: () => fetchNodeComments(nodeId, params),
-    enabled: !!nodeId,
+    queryKey: computed(() => queryKeys.nodeComments(toValue(nodeId), params)),
+    queryFn: () => fetchNodeComments(toValue(nodeId), params),
+    enabled: computed(() => !!toValue(nodeId)),
   })
 }
 
@@ -45,10 +49,9 @@ export function useCreateCommentMutation() {
   return useMutation({
     mutationFn: ({ nodeId, payload }: { nodeId: number; payload: CommentCreate }) => 
       createComment(nodeId, payload),
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['node-comments', variables.nodeId] })
-      queryClient.invalidateQueries({ queryKey: ['node-detail', variables.nodeId] })
-      queryClient.invalidateQueries({ queryKey: ['story-tree'] })
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.nodeComments(variables.nodeId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.storyNode(variables.nodeId) })
     }
   })
 }
@@ -57,11 +60,10 @@ export function useDeleteCommentMutation() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (commentId: number) => deleteComment(commentId),
-    onSuccess: (_, commentId) => {
-      // 这里需要获取节点 ID，简化处理
-      queryClient.invalidateQueries({ queryKey: ['node-comments'] })
-      queryClient.invalidateQueries({ queryKey: ['story-tree'] })
+    mutationFn: ({ commentId }: { commentId: number; nodeId: number }) => deleteComment(commentId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.nodeComments(variables.nodeId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.storyNode(variables.nodeId) })
     }
   })
 }
@@ -69,15 +71,27 @@ export function useDeleteCommentMutation() {
 // 通知相关 Queries
 export function useNotificationsQuery(params?: { skip?: number; limit?: number }) {
   return useQuery({
-    queryKey: ['notifications', params],
+    queryKey: queryKeys.notifications(params),
     queryFn: () => fetchNotifications(params),
   })
 }
 
 export function useUnreadCountQuery() {
   return useQuery({
-    queryKey: ['unread-count'],
+    queryKey: queryKeys.unreadCount(),
     queryFn: () => fetchUnreadCount(),
+  })
+}
+
+export function useMarkNotificationAsReadMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ notificationId }: { notificationId: number }) => markNotificationAsRead(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notificationsRoot() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.unreadCount() })
+    }
   })
 }
 
@@ -87,8 +101,8 @@ export function useMarkAllNotificationsAsReadMutation() {
   return useMutation({
     mutationFn: () => markAllNotificationsAsRead(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['unread-count'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notificationsRoot() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.unreadCount() })
     }
   })
 }

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
@@ -17,10 +18,10 @@ from app.models.user import User, UserRole
 from app.schemas import story as node_schema
 from app.schemas import story_book as book_schema
 from app.schemas import common as common_schema
-from app.models.interaction import NotificationType
-from app.utils.notification import send_notification
+from app.services.story_nodes import create_story_node_record
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ==========================================
@@ -81,6 +82,10 @@ def build_memory_tree(nodes: List[StoryNode]) -> List[node_schema.StoryNodeTreeI
             parent = node_map.get(n.parent_id)
             if parent is not None:
                 parent.children.append(item)
+            else:
+                # 当父节点因当前视角的权限/状态过滤而缺失时，
+                # 仍将可见节点提升为局部 root，避免整段子树直接消失。
+                roots.append(item)
 
     return roots
 
@@ -238,9 +243,36 @@ async def get_story_tree(
     stmt = _visible_filter(stmt, is_admin, current_user_id)
 
     nodes = (await db.execute(stmt)).scalars().all()
+    logger.info(
+        "Story tree query result: book_id=%s user_id=%s role=%s is_admin=%s node_count=%s nodes=%s",
+        book_id,
+        current_user_id,
+        current_user.role.value if current_user else "guest",
+        is_admin,
+        len(nodes),
+        [
+            {
+                "id": node.id,
+                "parent_id": node.parent_id,
+                "status": node.status.value,
+                "author_id": node.author_id,
+            }
+            for node in nodes
+        ],
+    )
     return build_memory_tree(nodes)
 
 
+@router.get(
+    "/node/{node_id}/lineage",
+    response_model=List[node_schema.StoryNodeRead],
+    summary="获取完整分支阅读路径",
+    operation_id="getNodeLineage",
+    responses={
+        200: {"description": "获取成功"},
+        404: {"model": common_schema.ErrorResponse, "description": "路径不存在或无权访问"},
+    },
+)
 @router.get(
     "/node/{node_id}/path",
     response_model=List[node_schema.StoryNodeRead],
@@ -334,112 +366,37 @@ async def create_story_node(
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
-    is_admin = current_user.role == UserRole.ADMIN
+    return await create_story_node_record(db=db, current_user=current_user, node_in=node_in)
 
-    # 1) 活动检查：phase 必须是 writing（或管理员），且 allow_new_nodes 开关打开
-    book = await db.get(StoryBook, node_in.book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="活动不存在")
 
-    if not is_admin:
-        if book.phase != BookPhase.WRITING:
-            raise HTTPException(status_code=400, detail="当前活动阶段不允许投稿")
-        if not book.allow_new_nodes:
-            raise HTTPException(status_code=400, detail="活动已暂停接受新投稿")
+@router.get(
+    "/node",
+    response_model=List[node_schema.StoryNodeListItem],
+    summary="获取某个节点的直接子分支",
+    operation_id="getNodeChildren",
+)
+async def read_child_nodes(
+    parent_id: int = Query(..., ge=1),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: Optional[User] = Depends(deps.get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+):
+    is_admin = bool(current_user and current_user.role == UserRole.ADMIN)
+    current_user_id = current_user.id if current_user else None
 
-    # 2) 根节点与父节点逻辑
-    parent_node: Optional[StoryNode] = None
-    root_id: int
-
-    if node_in.parent_id is None:
-        # 创建根节点：仅管理员可以
-        if not is_admin:
-            raise HTTPException(status_code=403, detail="只有管理员可以创建开篇")
-        # root_id 在 commit 后用自身 id 回填（见下方）
-        root_id = 0  # 占位，commit 后更新
-    else:
-        parent_node = await db.get(StoryNode, node_in.parent_id)
-        if not parent_node:
-            raise HTTPException(status_code=404, detail="父节点不存在")
-
-        if parent_node.book_id != node_in.book_id:
-            raise HTTPException(status_code=400, detail="父节点不属于同一活动")
-
-        if not is_admin:
-            if parent_node.freeze_interactions:
-                raise HTTPException(status_code=400, detail="该节点已冻结互动，暂不可继续续写")
-            if parent_node.is_ending:
-                raise HTTPException(status_code=400, detail="该分支已完结")
-            if parent_node.status != NodeStatus.PUBLISHED:
-                raise HTTPException(status_code=403, detail="无法在未发布节点后续写")
-
-        root_id = parent_node.root_id
-
-    # 3) 创建节点
-    now = datetime.now(timezone.utc)
-    initial_status = NodeStatus.PUBLISHED if is_admin else NodeStatus.PENDING
-    initial_visibility = NodeVisibility.PUBLIC if is_admin else NodeVisibility.PRIVATE
-
-    new_node = StoryNode(
-        book_id=node_in.book_id,
-        parent_id=node_in.parent_id,
-        root_id=root_id,
-        author_id=current_user.id,
-        title=node_in.title,
-        content=node_in.content,
-        branch_name=node_in.branch_name,
-        summary=node_in.summary,
-        zone=node_in.zone,
-        word_count=len(node_in.content),
-        status=initial_status,
-        visibility=initial_visibility,
-        published_at=now if is_admin else None,
-        last_activity_at=now,
+    stmt = (
+        select(StoryNode)
+        .options(selectinload(StoryNode.author), defer(StoryNode.content))
+        .where(StoryNode.parent_id == parent_id)
+        .order_by(desc(StoryNode.created_at))
+        .offset(skip)
+        .limit(limit)
     )
-    db.add(new_node)
+    stmt = _visible_filter(stmt, is_admin, current_user_id)
 
-    try:
-        await db.flush()  # 获取 new_node.id，但不 commit
-
-        # 根节点：root_id = 自身 id
-        if node_in.parent_id is None:
-            new_node.root_id = new_node.id
-        elif parent_node is not None:
-            if parent_node.children_count is None:
-                parent_node.children_count = 0
-            parent_node.children_count += 1
-
-        await db.commit()
-        await db.refresh(new_node)
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail="创建节点失败") from e
-
-    # 预加载 author，避免 response_model 触发懒加载 MissingGreenlet
-    new_node = (
-        await db.execute(
-            select(StoryNode)
-            .options(selectinload(StoryNode.author))
-            .where(StoryNode.id == new_node.id)
-        )
-    ).scalars().first()
-
-    # 4) 通知父节点作者（失败不影响主流程）
-    if parent_node and parent_node.author_id != current_user.id:
-        try:
-            await send_notification(
-                db=db,
-                receiver_id=parent_node.author_id,
-                sender_id=current_user.id,
-                type=NotificationType.BRANCHED,
-                node_id=parent_node.id,
-                book_id=parent_node.book_id,
-            )
-            await db.commit()
-        except Exception:
-            await db.rollback()
-
-    return new_node
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 @router.get(

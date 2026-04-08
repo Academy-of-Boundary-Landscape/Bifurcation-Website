@@ -1,6 +1,7 @@
 import shutil
 import os
 import uuid
+import logging
 from typing import Any, Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from app.models.user import User
 from app.schemas import common as common_schema
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # --- 1. 定义响应模型 (建议放入 schemas/upload.py) ---
 class UploadResponse(BaseModel):
@@ -75,7 +77,7 @@ async def upload_image(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
     except Exception as e:
-        print(f"Upload Error: {e}")
+        logger.error("文件保存失败: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500, 
             detail="服务器文件保存失败，请稍后重试"

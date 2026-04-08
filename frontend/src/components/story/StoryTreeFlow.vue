@@ -1,34 +1,8 @@
 <script setup lang="ts">
-import { 
-  NCard, 
-  NButton, 
-  NSpace, 
-  NTag,
-  NSpin,
-  NIcon,
-  NUpload,
-  NProgress
-} from 'naive-ui'
-import { 
-  VueFlow, 
-  useVueFlow,
-  Controls,
-  Background,
-  MiniMap,
-  useNodes,
-  useEdges,
-  useStore,
-  Position,
-  MarkerType,
-  type ConnectionLineOptions,
-  type Viewport,
-  type ConnectionLineType,
-  type Connection,
-  type HandleType,
-  useNodesInitialized,
-  useViewport
-} from 'vue-flow'
-import { computed, ref, onMounted, watch, nextTick } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { NButton, NCard, NSpace, NSpin } from 'naive-ui'
+
+import StoryTreeFlowNode from '@/components/story/StoryTreeFlowNode.vue'
 import type { StoryNodeTreeItem } from '@/types/models'
 
 type FlowNodeStatus = StoryNodeTreeItem['status']
@@ -41,6 +15,8 @@ interface FlowStoryNodeData {
   likes_count: number
   is_ending: boolean
   summary: string
+  childBranchNames: string[]
+  childCount: number
 }
 
 interface FlowPosition {
@@ -52,358 +28,481 @@ interface FlowStoryNode {
   id: string
   position: FlowPosition
   data: FlowStoryNodeData
-  type: 'storyNode'
 }
 
 interface FlowStoryEdge {
   id: string
   source: string
   target: string
-  animated: boolean
-  markerEnd: {
-    type: unknown
-    color: string
-    width: number
-    height: number
-  }
 }
 
-interface MiniMapNodeLike {
-  data?: Partial<FlowStoryNodeData>
-}
-
-interface FlowNodeClickPayload {
-  id: string
-}
+const NODE_WIDTH = 124
+const NODE_HEIGHT = 124
+const HORIZONTAL_GAP = 184
+const VERTICAL_GAP = 158
+const SINGLE_CHILD_OFFSET = 84
+const PADDING = 80
+const MIN_ZOOM = 0.45
+const MAX_ZOOM = 1.8
 
 const props = defineProps<{
   tree: StoryNodeTreeItem[]
+  selectedNodeId?: number | null
+  isLoading?: boolean
 }>()
 
-// 初始化 Vue Flow
-const { nodes, edges, fitView, zoomTo, setViewport } = useVueFlow({
-  maxZoom: 2,
-  minZoom: 0.5,
-})
+const emit = defineEmits<{
+  'node-click': [nodeId: number]
+}>()
 
-// 添加自动布局功能
-const { nodesInitialized } = useNodesInitialized()
-const viewport = useViewport()
+const containerRef = ref<HTMLElement | null>(null)
+const zoom = ref(1)
+const offsetX = ref(0)
+const offsetY = ref(0)
+const isDragging = ref(false)
+const dragStartX = ref(0)
+const dragStartY = ref(0)
+const dragOriginX = ref(0)
+const dragOriginY = ref(0)
 
-// 将故事树转换为 Vue Flow 节点和边
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
 function convertToFlowData(items: StoryNodeTreeItem[]): { nodes: FlowStoryNode[]; edges: FlowStoryEdge[] } {
   const flowNodes: FlowStoryNode[] = []
   const flowEdges: FlowStoryEdge[] = []
-  
-  function processNodes(nodes: StoryNodeTreeItem[], parentId: string | null = null, level: number = 0, index: number = 0) {
-    nodes.forEach((node, i) => {
-      // 计算节点位置 - 基于层级的自动布局
-      const x = level * 250 + 50
-      const y = (index + i) * 120 + 50
-      
-      // 创建节点
-      const nodeData: FlowStoryNode = {
-        id: node.id.toString(),
-        position: { x, y },
-        data: {
-          sourceId: node.id,
-          title: node.branch_name || node.title || `节点${node.id}`,
-          author: node.author?.username || '未知作者',
-          status: node.status,
-          likes_count: node.likes_count,
-          is_ending: node.is_ending,
-          summary: node.summary || '',
-          // content 字段在 StoryNodeTreeItem 中不存在，使用 summary 替代
-        },
-        type: 'storyNode',
+
+  function placeNode(node: StoryNodeTreeItem, level: number, parentId: string | null, cursorY: number): number {
+    const x = level * HORIZONTAL_GAP + PADDING
+    const nodeId = node.id.toString()
+
+    if (parentId) {
+      flowEdges.push({
+        id: `edge-${parentId}-${node.id}`,
+        source: parentId,
+        target: nodeId,
+      })
+    }
+
+    const children = node.children ?? []
+    let y = cursorY
+
+    if (children.length === 1) {
+      const child = children[0]
+      const childStartY = cursorY + SINGLE_CHILD_OFFSET
+      const nextChildY = placeNode(child, level + 1, nodeId, childStartY)
+      y = cursorY
+      cursorY = Math.max(nextChildY, cursorY + VERTICAL_GAP)
+    } else if (children.length > 1) {
+      let nextChildY = cursorY
+      const childCenters: number[] = []
+
+      for (const child of children) {
+        const childStartY = nextChildY
+        nextChildY = placeNode(child, level + 1, nodeId, nextChildY)
+        childCenters.push((childStartY + nextChildY - VERTICAL_GAP) / 2)
       }
-      
-      flowNodes.push(nodeData)
-      
-      // 创建边（连接父节点）
-      if (parentId && node.parent_id !== null) {
-        flowEdges.push({
-          id: `edge-${parentId}-${node.id}`,
-          source: parentId,
-          target: node.id.toString(),
-          animated: true,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: '#8b5cf6',
-            width: 20,
-            height: 20,
-          }
-        })
-      }
-      
-      // 处理子节点
-      if (node.children && node.children.length > 0) {
-        // 递归处理子节点，使用新的索引
-        processNodes(node.children, node.id.toString(), level + 1, index + i)
-      }
+
+      y = childCenters.reduce((sum, value) => sum + value, 0) / childCenters.length
+      cursorY = nextChildY
+    } else {
+      cursorY += VERTICAL_GAP
+    }
+
+    flowNodes.push({
+      id: nodeId,
+      position: { x, y: y + PADDING },
+      data: {
+        sourceId: node.id,
+        title: node.branch_name || node.title || `节点${node.id}`,
+        author: node.author?.username || '未知作者',
+        status: node.status,
+        likes_count: node.likes_count,
+        is_ending: node.is_ending,
+        summary: node.summary || '',
+        childBranchNames: children
+          .map((child) => child.branch_name || child.title || `节点${child.id}`)
+          .filter((label) => Boolean(label))
+          .slice(0, 4),
+        childCount: children.length,
+      },
     })
+
+    return cursorY
   }
-  
-  // 从根节点开始处理
-  if (props.tree.length > 0) {
-    processNodes(props.tree)
+
+  let nextRootY = 0
+  for (const rootNode of items) {
+    nextRootY = placeNode(rootNode, 0, null, nextRootY)
+    nextRootY += VERTICAL_GAP * 0.35
   }
-  
+
   return { nodes: flowNodes, edges: flowEdges }
 }
 
-// 初始化节点和边
-onMounted(() => {
-  const flowData = convertToFlowData(props.tree)
-  nodes.value = flowData.nodes
-  edges.value = flowData.edges
-  
-  // 等待节点初始化后调整布局
-  nextTick(() => {
-    setTimeout(() => {
-      fitView()
-    }, 100)
-  })
+const flowData = computed(() => convertToFlowData(props.tree))
+const nodes = computed(() => flowData.value.nodes)
+const edges = computed(() => flowData.value.edges)
+
+const nodeMap = computed(() => {
+  return new Map(nodes.value.map((node) => [node.id, node]))
 })
 
-// 监听 tree 属性变化
-watch(() => props.tree, (newTree) => {
-  const flowData = convertToFlowData(newTree)
-  nodes.value = flowData.nodes
-  edges.value = flowData.edges
-  
-  // 重新布局
-  nextTick(() => {
-    setTimeout(() => {
-      fitView()
-    }, 100)
-  })
-}, { deep: true })
+const canvasWidth = computed(() => {
+  if (!nodes.value.length) return 960
+  const maxX = Math.max(...nodes.value.map((node) => node.position.x + NODE_WIDTH))
+  return maxX + PADDING
+})
 
-// 自定义节点类型
-const customNodeTypes = {
-  storyNode: {
-    component: {
-      name: 'StoryNode',
-      props: {
-        class: 'bg-#1a1a1a border-#2a2a2a rounded-lg shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer'
+const canvasHeight = computed(() => {
+  if (!nodes.value.length) return 560
+  const maxY = Math.max(...nodes.value.map((node) => node.position.y + NODE_HEIGHT))
+  return maxY + PADDING
+})
+
+const selectedNode = computed(() => {
+  if (props.selectedNodeId == null) return null
+  return nodes.value.find((node) => node.data.sourceId === props.selectedNodeId) ?? null
+})
+
+const renderedEdges = computed(() => {
+  return edges.value
+    .map((edge) => {
+      const source = nodeMap.value.get(edge.source)
+      const target = nodeMap.value.get(edge.target)
+      if (!source || !target) return null
+
+      return {
+        id: edge.id,
+        x1: source.position.x + NODE_WIDTH,
+        y1: source.position.y + NODE_HEIGHT / 2,
+        x2: target.position.x,
+        y2: target.position.y + NODE_HEIGHT / 2,
+        sourceChildCount: source.data.childCount,
+        path: [
+          `M ${source.position.x + NODE_WIDTH} ${source.position.y + NODE_HEIGHT / 2}`,
+          `C ${source.position.x + NODE_WIDTH + 52} ${source.position.y + NODE_HEIGHT / 2},`,
+          `${target.position.x - 52} ${target.position.y + NODE_HEIGHT / 2},`,
+          `${target.position.x} ${target.position.y + NODE_HEIGHT / 2}`,
+        ].join(' '),
       }
-    }
+    })
+    .filter((edge): edge is NonNullable<typeof edge> => edge !== null)
+})
+
+function setViewport(nextX: number, nextY: number, nextZoom: number) {
+  zoom.value = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+  offsetX.value = nextX
+  offsetY.value = nextY
+}
+
+function fitView() {
+  const container = containerRef.value
+  if (!container) return
+
+  const width = container.clientWidth || 1
+  const height = container.clientHeight || 1
+  const fitZoom = clamp(
+    Math.min(width / canvasWidth.value, height / canvasHeight.value) * 0.92,
+    MIN_ZOOM,
+    MAX_ZOOM,
+  )
+
+  const nextX = (width - canvasWidth.value * fitZoom) / 2
+  const nextY = (height - canvasHeight.value * fitZoom) / 2
+  setViewport(nextX, nextY, fitZoom)
+}
+
+function centerOnNode(nodeId: number) {
+  const container = containerRef.value
+  if (!container) return
+  const node = nodes.value.find((item) => item.data.sourceId === nodeId)
+  if (!node) return
+
+  const width = container.clientWidth || 1
+  const height = container.clientHeight || 1
+  const nextX = width / 2 - (node.position.x + NODE_WIDTH / 2) * zoom.value
+  const nextY = height / 2 - (node.position.y + NODE_HEIGHT / 2) * zoom.value
+  setViewport(nextX, nextY, zoom.value)
+}
+
+function zoomTo(nextZoom: number) {
+  const container = containerRef.value
+  if (!container) {
+    zoom.value = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+    return
   }
+
+  const rect = container.getBoundingClientRect()
+  const centerX = rect.width / 2
+  const centerY = rect.height / 2
+  const clampedZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+  const worldX = (centerX - offsetX.value) / zoom.value
+  const worldY = (centerY - offsetY.value) / zoom.value
+  setViewport(centerX - worldX * clampedZoom, centerY - worldY * clampedZoom, clampedZoom)
 }
 
 function resetViewport() {
-  setViewport({ x: 0, y: 0, zoom: 1 })
+  fitView()
+}
+
+function beginDrag(event: MouseEvent) {
+  isDragging.value = true
+  dragStartX.value = event.clientX
+  dragStartY.value = event.clientY
+  dragOriginX.value = offsetX.value
+  dragOriginY.value = offsetY.value
+}
+
+function handleGlobalMouseMove(event: MouseEvent) {
+  if (!isDragging.value) return
+  offsetX.value = dragOriginX.value + (event.clientX - dragStartX.value)
+  offsetY.value = dragOriginY.value + (event.clientY - dragStartY.value)
+}
+
+function endDrag() {
+  isDragging.value = false
+}
+
+function handleWheel(event: WheelEvent) {
+  event.preventDefault()
+  const container = containerRef.value
+  if (!container) return
+
+  const rect = container.getBoundingClientRect()
+  const pointerX = event.clientX - rect.left
+  const pointerY = event.clientY - rect.top
+  const factor = event.deltaY > 0 ? 0.92 : 1.08
+  const nextZoom = clamp(zoom.value * factor, MIN_ZOOM, MAX_ZOOM)
+  const worldX = (pointerX - offsetX.value) / zoom.value
+  const worldY = (pointerY - offsetY.value) / zoom.value
+  setViewport(pointerX - worldX * nextZoom, pointerY - worldY * nextZoom, nextZoom)
 }
 
 function emitNodeClick(sourceId: number) {
   emit('node-click', sourceId)
 }
 
-function getMiniMapNodeColor(node: MiniMapNodeLike) {
-  const data = node?.data ?? {}
-  if (data.is_ending) return '#34d399'
-  if (data.status === 'published') return '#60a5fa'
-  if (data.status === 'pending') return '#f59e0b'
-  return '#ef4444'
+function isSelectedNode(sourceId: number) {
+  return props.selectedNodeId === sourceId
 }
 
-// 节点点击事件
-function handleNodeClick(event: MouseEvent, node: FlowNodeClickPayload) {
-  // 获取节点ID并跳转到详情页
-  const nodeId = parseInt(node.id)
-  if (!isNaN(nodeId)) {
-    // 触发路由跳转事件
-    emit('node-click', nodeId)
-  }
-}
+watch(
+  () => props.tree,
+  async () => {
+    await nextTick()
+    fitView()
+  },
+  { deep: true, immediate: true },
+)
 
-// 节点悬停效果
-function handleNodeMouseEnter(event: MouseEvent, node: FlowNodeClickPayload) {
-  // 添加悬停效果
-  const nodeEl = event.target as HTMLElement
-  if (nodeEl) {
-    nodeEl.style.transform = 'scale(1.05)'
-  }
-}
+watch(
+  () => props.selectedNodeId,
+  async (nodeId) => {
+    if (nodeId == null) return
+    await nextTick()
+    centerOnNode(nodeId)
+  },
+)
 
-function handleNodeMouseLeave(event: MouseEvent, node: FlowNodeClickPayload) {
-  // 移除悬停效果
-  const nodeEl = event.target as HTMLElement
-  if (nodeEl) {
-    nodeEl.style.transform = 'scale(1)'
-  }
-}
+onMounted(() => {
+  window.addEventListener('mousemove', handleGlobalMouseMove)
+  window.addEventListener('mouseup', endDrag)
+})
 
-// 定义事件
-const emit = defineEmits(['node-click'])
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', handleGlobalMouseMove)
+  window.removeEventListener('mouseup', endDrag)
+})
 </script>
 
 <template>
-  <n-card class="bg-#1a1a1a border-#2a2a2a">
+  <n-card class="ui-shell-panel" :bordered="false">
     <template #header>
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-bold text-white">故事树可视化</h2>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="ui-shell-kicker">Story Graph</p>
+          <h2 class="ui-shell-title mt-2 text-[1.4rem] uppercase">故事树可视化</h2>
+        </div>
         <n-space>
           <n-button size="small" @click="fitView">
-            重置视图
+            自适应视图
           </n-button>
           <n-button size="small" @click="zoomTo(1)">
             缩放至100%
           </n-button>
+          <n-button size="small" @click="zoomTo(zoom * 1.15)">
+            放大
+          </n-button>
+          <n-button size="small" @click="zoomTo(zoom / 1.15)">
+            缩小
+          </n-button>
           <n-button size="small" @click="resetViewport">
-            居中显示
+            重置视图
           </n-button>
         </n-space>
       </div>
     </template>
-    
-    <n-spin :show="!tree || tree.length === 0">
-      <div v-if="!tree || tree.length === 0" class="text-center py-10 text-#666666">
+
+    <n-spin :show="Boolean(isLoading)">
+      <div v-if="!isLoading && (!tree || tree.length === 0)" class="ui-status-note text-center">
         暂无节点，成为第一个创作者吧！
       </div>
-      
-      <div 
-        v-else 
-        class="w-full h-[600px] bg-#0a0a0a rounded-lg overflow-hidden relative"
-        style="min-height: 600px;"
+
+      <div
+        v-else-if="!isLoading"
+        ref="containerRef"
+        class="story-flow-canvas ui-shell-panel ui-shell-grid"
+        :class="{ 'story-flow-canvas--dragging': isDragging }"
+        @mousedown="beginDrag"
+        @wheel="handleWheel"
       >
-        <!-- Vue Flow 画布 -->
-        <VueFlow
-          :nodes="nodes"
-          :edges="edges"
-          :node-types="customNodeTypes"
-          fit-view-on-init
-          class="w-full h-full"
-          @node-click="handleNodeClick"
-          @node-mouse-enter="handleNodeMouseEnter"
-          @node-mouse-leave="handleNodeMouseLeave"
+        <div
+          class="story-flow-stage"
+          :style="{
+            width: `${canvasWidth}px`,
+            height: `${canvasHeight}px`,
+            transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
+          }"
         >
-          <!-- 背景 -->
-          <Background 
-            pattern-color="#1a1a1a" 
-            gap="20" 
-            size="1"
-          />
-          
-          <!-- 控制面板 -->
-          <Controls />
-          
-          <!-- 迷你地图 -->
-          <MiniMap 
-            :node-color="getMiniMapNodeColor"
-            :node-border-radius="8"
-            :node-width="100"
-            :node-height="60"
-            class="absolute bottom-4 right-4"
-          />
-          
-          <!-- 自定义节点渲染 -->
-          <template #node-storyNode="{ data, selected }">
-            <div 
-              class="relative p-4 w-48 cursor-pointer transition-all"
-              :class="selected ? 'ring-2 ring-#8b5cf6 scale-105' : ''"
-              @click="emitNodeClick(data.sourceId)"
-            >
-              <div class="absolute -top-2 -right-2">
-                <n-tag 
-                  v-if="data.is_ending" 
-                  type="success" 
-                  size="small"
-                  round
-                >
-                  ✅
-                </n-tag>
-                <n-tag 
-                  v-else-if="data.status === 'published'" 
-                  type="primary" 
-                  size="small"
-                  round
-                >
-                  🟢
-                </n-tag>
-                <n-tag 
-                  v-else-if="data.status === 'pending'" 
-                  type="warning" 
-                  size="small"
-                  round
-                >
-                  🟡
-                </n-tag>
-                <n-tag 
-                  v-else 
-                  type="error" 
-                  size="small"
-                  round
-                >
-                  🔴
-                </n-tag>
-              </div>
-              
-              <h3 class="font-semibold text-white text-sm mb-1 truncate">
-                {{ data.title }}
-              </h3>
-              <p class="text-xs text-#666666 mb-2 line-clamp-2">
-                {{ data.summary }}
-              </p>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-#8b5cf6">{{ data.likes_count }} 赞</span>
-                <span class="text-#666666">{{ data.author }}</span>
-              </div>
-            </div>
-          </template>
-        </VueFlow>
+          <svg class="story-flow-stage__edges" :width="canvasWidth" :height="canvasHeight">
+            <defs>
+              <filter id="story-flow-edge-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="1.8" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <path
+              v-for="edge in renderedEdges"
+              :key="edge.id"
+              :d="edge.path"
+              class="story-flow-stage__edge"
+              :class="{ 'story-flow-stage__edge--single-child': edge.sourceChildCount === 1 }"
+              filter="url(#story-flow-edge-glow)"
+            />
+            <circle
+              v-for="edge in renderedEdges"
+              :key="`${edge.id}-dot`"
+              :cx="edge.x2"
+              :cy="edge.y2"
+              r="2.6"
+              class="story-flow-stage__edge-dot"
+            />
+          </svg>
+
+          <button
+            v-for="node in nodes"
+            :key="node.id"
+            type="button"
+            class="story-flow-stage__node"
+            :style="{
+              left: `${node.position.x}px`,
+              top: `${node.position.y}px`,
+              width: `${NODE_WIDTH}px`,
+            }"
+            @click.stop="emitNodeClick(node.data.sourceId)"
+          >
+            <story-tree-flow-node
+              :author="node.data.author"
+              :is-ending="node.data.is_ending"
+              :likes-count="node.data.likes_count"
+              :selected="isSelectedNode(node.data.sourceId)"
+              :status="node.data.status"
+              :summary="node.data.summary"
+              :title="node.data.title"
+              :child-branch-names="node.data.childBranchNames"
+            />
+          </button>
+        </div>
+
+        <div class="story-flow-overlay">
+          <div class="story-flow-overlay__badge">ZOOM {{ Math.round(zoom * 100) }}%</div>
+          <div v-if="selectedNode" class="story-flow-overlay__badge">
+            FOCUS #{{ selectedNode.data.sourceId }}
+          </div>
+        </div>
       </div>
     </n-spin>
   </n-card>
 </template>
 
 <style scoped>
-/* Vue Flow 样式 */
-.vue-flow__node {
-  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
-  border: 1px solid #2a2a2a;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease;
-  transition-property: transform, box-shadow;
+.story-flow-canvas {
+  position: relative;
+  height: 600px;
+  overflow: visible;
+  border-radius: var(--radius-lg);
+  cursor: grab;
+  user-select: none;
 }
 
-.vue-flow__node:hover {
-  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
-  transform: translateY(-1px) scale(1.05);
+.story-flow-canvas--dragging {
+  cursor: grabbing;
 }
 
-.vue-flow__edge-path {
-  stroke: #60a5fa;
-  stroke-width: 2;
-  transition: stroke 0.3s ease;
+.story-flow-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
-.vue-flow__edge-path:hover {
-  stroke: #8b5cf6;
+.story-flow-stage__edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
 }
 
-.vue-flow__control-button {
-  background: rgba(26, 26, 26, 0.8);
-  border: 1px solid #2a2a2a;
-  color: white;
-  transition: all 0.3s ease;
+.story-flow-stage__edge {
+  fill: none;
+  stroke: rgba(230, 234, 237, 0.64);
+  stroke-width: 1.45;
+  stroke-linecap: round;
 }
 
-.vue-flow__control-button:hover {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: #8b5cf6;
-  transform: scale(1.05);
+.story-flow-stage__edge--single-child {
+  stroke-dasharray: 0;
+  stroke-width: 1.6;
+  stroke: rgba(236, 240, 243, 0.74);
 }
 
-.vue-flow__minimap-node {
-  background: #8b5cf6;
-  border-radius: 4px;
-  transition: all 0.3s ease;
+.story-flow-stage__edge-dot {
+  fill: rgba(239, 242, 245, 0.82);
+  opacity: 0.9;
 }
 
-.vue-flow__minimap-node:hover {
-  background: #6366f1;
-  transform: scale(1.1);
+.story-flow-stage__node {
+  position: absolute;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.story-flow-overlay {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.story-flow-overlay__badge {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 7, 10, 0.76);
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 </style>

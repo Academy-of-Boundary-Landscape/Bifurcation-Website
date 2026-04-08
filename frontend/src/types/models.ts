@@ -14,7 +14,6 @@ export interface User {
   username: string
   role: UserRole
   is_active: boolean
-  is_verified: boolean
   bio: string | null
   avatar: string | null
   nodes_count?: number
@@ -61,6 +60,11 @@ export interface StoryBookCreate {
   title: string
   description?: string | null
   cover_image?: string | null
+  phase?: BookPhase
+  start_at?: string | null
+  writing_end_at?: string | null
+  showcase_end_at?: string | null
+  allow_new_nodes?: boolean
 }
 
 // 作者信息
@@ -88,7 +92,9 @@ export interface StoryNode {
   comments_count: number
   children_count: number
   is_ending: boolean
+  freeze_interactions: boolean
   is_featured: boolean
+  feature_rank: number | null
   published_at: string | null
   created_at: string
   updated_at: string
@@ -96,7 +102,9 @@ export interface StoryNode {
 
 export interface StoryNodeRead extends StoryNode {
   content: string
+  reject_reason: string | null
   archived_reason: string | null
+  reviewed_by?: number | null
   reviewed_at: string | null
 }
 
@@ -172,11 +180,19 @@ export interface NotificationCountResponse {
 
 // 管理员统计数据
 export interface AdminDashboardStats {
-  pending_nodes_count: number
-  today_nodes_count: number
-  total_nodes_count: number
-  users_count: number
-  comments_count: number
+  users: {
+    total: number
+    active: number
+    inactive: number
+    new_7d: number
+  }
+  nodes: {
+    total: number
+    pending: number
+    published: number
+    archived: number
+    new_7d: number
+  }
 }
 
 // 用户统计响应
@@ -220,38 +236,33 @@ export interface PaginatedResponse<T> {
 // API 错误响应类型（在 api.ts 中定义，这里提供类型引用）
 // import { ApiErrorResponse } from '@/types/api'
 export type ApiErrorResponse = {
-  detail: string;
+  detail: string
 } | {
-  detail: Array<{ loc: (string | number)[]; msg: string; type: string }>;
+  detail: Array<{ loc: (string | number)[]; msg: string; type: string }>
 }
 
 // 管理员节点统计
 export interface AdminNodeStatsResponse {
-  pending_count: number;
-  published_count: number;
-  archived_count: number;
+  pending_count: number
+  published_count: number
+  archived_count: number
 }
 
 // 用户节点统计响应
 export interface UserNodeStatsResponse {
-  published_nodes_count: number;
-  pending_nodes_count: number;
-  archived_nodes_count: number;
+  published_nodes_count: number
+  pending_nodes_count: number
+  archived_nodes_count: number
 }
 
 // 故事册节点总数（用于 StoryBookDetailPage）
 export interface StoryBookNodesCountResponse {
-  nodes_count: number;
+  nodes_count: number
 }
 
 // 节点路径类型（用于 StoryNodePage）
 export interface NodePathResponse extends StoryNodeRead {
-  depth: number;
-}
-
-// 故事册节点总数
-export interface StoryBookNodesCountResponse {
-  nodes_count: number;
+  depth: number
 }
 
 // 树状节点响应（用于 StoryBookDetailPage）
@@ -259,29 +270,9 @@ export interface StoryTreeResponse extends StoryNodeTreeItem {}
 
 // 故事册统计响应
 export interface StoryBookStatsResponse {
-  total_books: number;
-  active_books: number;
-  pending_books: number;
-  writing_books: number;
-  showcase_books: number;
-}
-
-// 用户节点统计响应
-export interface UserNodeStatsResponse {
-  published_nodes_count: number;
-  pending_nodes_count: number;
-  archived_nodes_count: number;
-}
-
-// 用户通知摘要（用于通知页）
-export interface UserNotificationsSummary {
-  unread_count: number;
-  total_count: number;
-}
-
-// 管理员节点统计
-export interface AdminNodeStatsResponse {
-  pending_count: number;
-  published_count: number;
-  archived_count: number;
+  total_books: number
+  active_books: number
+  pending_books: number
+  writing_books: number
+  showcase_books: number
 }

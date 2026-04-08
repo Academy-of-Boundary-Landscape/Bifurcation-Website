@@ -5,7 +5,7 @@ from app.core.config import settings
 # 创建异步引擎
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=True, # 开发模式下打印 SQL，上线关掉
+    echo=settings.SQL_ECHO,
     future=True
 )
 

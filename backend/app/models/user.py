@@ -41,8 +41,6 @@ class User(Base):
         index=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-
     # 本地密码在接入 SSO 后可以为空
     hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -72,6 +70,7 @@ class User(Base):
     nodes: Mapped[List["StoryNode"]] = relationship(
         "StoryNode",
         back_populates="author",
+        foreign_keys="StoryNode.author_id",
         cascade="save-update, merge",
     )
 
@@ -84,6 +83,7 @@ class User(Base):
     comments: Mapped[List["StoryComment"]] = relationship(
         "StoryComment",
         back_populates="user",
+        foreign_keys="StoryComment.user_id",
         cascade="save-update, merge",
     )
 

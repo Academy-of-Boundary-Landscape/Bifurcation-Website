@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { NCard, NAvatar, NButton } from 'naive-ui'
-import { ref, computed, onMounted } from 'vue'
-import type { Comment } from '@/types/models'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { get, post } from '@/services/http'
+import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useDeleteCommentMutation, useNodeCommentsQuery } from '@/features/interaction/queries'
 
 const props = defineProps<{
   nodeId: number
@@ -13,38 +11,20 @@ const props = defineProps<{
 const emits = defineEmits(['comment-added'])
 
 const authStore = useAuthStore()
-const queryClient = useQueryClient()
-const comments = ref<Comment[]>([])
 
-// 获取评论列表
-const { data: commentData, isLoading, refetch } = useQuery<Comment[]>({
-  queryKey: ['node-comments', props.nodeId],
-  queryFn: () => get<Comment[]>(`/interaction/node/${props.nodeId}/comments`),
-})
+const { data: commentData, isLoading, refetch } = useNodeCommentsQuery(computed(() => props.nodeId))
+const { mutate: deleteComment } = useDeleteCommentMutation()
 
-// 删除评论
-const { mutate: deleteComment } = useMutation({
-  mutationFn: (commentId: number) => post(`/interaction/comment/${commentId}/delete`),
-  onSuccess: () => {
-    // 刷新评论列表
-    refetch()
-  }
-})
+const comments = computed(() => commentData.value ?? [])
 
 function handleRefresh() {
   void refetch()
 }
 
 function handleDeleteComment(commentId: number) {
-  deleteComment(commentId)
+  deleteComment({ commentId, nodeId: props.nodeId })
 }
 
-// 初始化
-onMounted(() => {
-  if (commentData.value) {
-    comments.value = commentData.value
-  }
-})
 </script>
 
 <template>
