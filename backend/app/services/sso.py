@@ -184,6 +184,13 @@ def _flatten_claim_values(value: Any) -> list[str]:
     if isinstance(value, str):
         parts = [part.strip() for part in value.split(",")]
         return [part for part in parts if part]
+    if isinstance(value, dict):
+        # Casdoor roles claim 是对象数组，每个对象有 name 字段，例如：
+        # {"name": "admin", "displayName": "管理员", "owner": "..."}
+        name = value.get("name")
+        if name and isinstance(name, str) and name.strip():
+            return [name.strip()]
+        return []
     if isinstance(value, (list, tuple, set)):
         items: list[str] = []
         for item in value:
@@ -338,13 +345,25 @@ async def _find_or_create_local_user(db: AsyncSession, claims: dict[str, Any]) -
 
 
 async def _resolve_claims(token_data: dict[str, Any]) -> dict[str, Any]:
+    claims: dict[str, Any] = {}
+
     if token_data.get("id_token"):
         claims = await _decode_id_token(token_data["id_token"])
-    elif token_data.get("access_token"):
-        claims = await _fetch_userinfo(token_data["access_token"])
-    else:
-        raise HTTPException(status_code=400, detail="Casdoor 响应中缺少可用身份凭证")
 
+    # 无论 id_token 是否存在，都用 userinfo 补充——
+    # Casdoor 的 id_token 不保证包含 roles 等扩展字段，userinfo 更完整。
+    if token_data.get("access_token"):
+        try:
+            userinfo = await _fetch_userinfo(token_data["access_token"])
+            # userinfo 优先级高于 id_token（userinfo 是实时的）
+            claims = {**claims, **userinfo}
+        except HTTPException as exc:
+            if not claims:
+                raise
+            logger.warning("Userinfo fetch failed, falling back to id_token only: %s", exc.detail)
+
+    if not claims:
+        raise HTTPException(status_code=400, detail="Casdoor 响应中缺少可用身份凭证")
     if not claims.get("sub"):
         raise HTTPException(status_code=400, detail="Casdoor 用户信息缺少 sub")
     logger.info("Resolved Casdoor claims keys: %s", sorted(claims.keys()))

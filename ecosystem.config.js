@@ -10,9 +10,11 @@ module.exports = {
       name: 'bifurcation-backend',
 
       // 使用 venv 内的 Python 直接运行入口文件
-      interpreter: './venv/bin/python',
-      script: 'main.py',
-      cwd: './backend',
+      // __dirname 是 ecosystem.config.js 所在目录的绝对路径，
+      // 确保无论从哪里执行 pm2 start 都能找到正确的解释器和脚本
+      interpreter: `${__dirname}/backend/venv/bin/python`,
+      script: `${__dirname}/backend/main.py`,
+      cwd: `${__dirname}/backend`,
 
       // 进程数：Python 单进程（uvicorn 内建 async，单进程已足够；
       // 如需多核并发，改用 uvicorn --workers N 启动方式，见下方注释）
@@ -54,9 +56,9 @@ module.exports = {
 //
 // 如果服务器核数 ≥ 4，可以改用 gunicorn + uvicorn worker：
 //
-//   interpreter: './venv/bin/gunicorn',
+//   interpreter: `${__dirname}/backend/venv/bin/gunicorn`,
 //   script: 'main:app',
-//   cwd: './backend',
+//   cwd: `${__dirname}/backend`,
 //   args: '-k uvicorn.workers.UvicornWorker -w 2 --bind 127.0.0.1:8057',
 //   instances: 1,
 //   exec_mode: 'fork',
