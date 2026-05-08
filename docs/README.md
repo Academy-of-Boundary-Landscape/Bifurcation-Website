@@ -18,6 +18,10 @@
 - [`frontend/tree-experience.md`](frontend/tree-experience.md) — 树状阅读视图方案
 - [`frontend/discovery-rail.md`](frontend/discovery-rail.md) — 发现栏组件与后端接口契约
 
+## 部署 / 运维
+
+- [`deployment.md`](deployment.md) — **从零开始的部署清单**（GitHub / Casdoor / 服务器 Docker / Nginx + HTTPS）
+
 ## 记录
 
 - [`changelog.md`](changelog.md) — 改造记录

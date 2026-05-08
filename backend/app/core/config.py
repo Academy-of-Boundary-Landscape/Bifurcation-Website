@@ -1,9 +1,14 @@
 import os
+from pathlib import Path
 from typing import Optional
 
 from pydantic import field_validator
 from pydantic.config import ConfigDict
 from pydantic_settings import BaseSettings
+
+# config.py 在 backend/app/core/，往上三层到 backend/
+_BACKEND_DIR = Path(__file__).parents[2]
+_ENV_FILE = _BACKEND_DIR / ".env"
 
 
 def _resolve_database_url() -> str:
@@ -30,7 +35,8 @@ def _resolve_cors_origins() -> list[str]:
 
 class Settings(BaseSettings):
     model_config = ConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),
+        env_file_encoding="utf-8",
         extra="ignore",
     )
 

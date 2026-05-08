@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 虚拟环境（Docker 镜像会重新安装依赖）
+venv/
+.venv/
+env/
+
+# 本地 SQLite 数据库
+*.db
+*.sqlite
+*.sqlite3
+dev.db
+
+# 测试 / 工具
+tests/
+requirements-dev.txt
+
+# 环境变量与日志（运行时挂载）
+.env
+.env.*
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 用户上传内容（运行时 volume 挂载）
+static/uploads/
+
+# Git / 文档
+.git/
+.gitignore
+README*

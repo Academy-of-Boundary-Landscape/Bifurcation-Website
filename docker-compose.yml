@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bifurcation-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bifurcation
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-change_me}
+      POSTGRES_DB: bifurcation_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # 不暴露到宿主机——backend 通过 Docker 内部网络 postgres:5432 连接
+    # 如需调试：docker compose exec postgres psql -U bifurcation
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bifurcation"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    image: ghcr.io/renko6626/bifurcation-backend:latest  # GHCR 要求全小写
+    container_name: bifurcation-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8057:8057"
+    # 把 .env 中所有变量加载为容器内 os.environ，
+    # 这样 config.py 的 os.getenv("APP_ENV") 等检查能拿到正确值
+    env_file:
+      - ./.env
+    volumes:
+      # 配置文件（pydantic-settings 也能从这里读，双保险）
+      - ./.env:/app/.env:ro
+      # 用户上传的内容（头像/图片等）需要在容器外持久化
+      - ./backend/static/uploads:/app/static/uploads
+      # 备份目录（pg_dump 输出）
+      - ./backups:/app/backups
+    environment:
+      # PYTHONPATH 必须显式覆盖，避免 .env 里如果有同名变量被影响
+      PYTHONPATH: /app
+    # 容器内用户 UID:GID 与宿主机一致，避免挂载目录权限问题
+    user: "${UID:-1000}:${GID:-1000}"
+    # 优雅停机：给 uvicorn 时间排空在途请求
+    stop_grace_period: 8s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
