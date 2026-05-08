@@ -71,6 +71,15 @@ const selectedPath = computed(() => {
   return findPath(tree.value ?? [], selectedNode.value.id)
 })
 
+// 给 StoryTreeFlow 用的 ID 列表（避免组件深拷贝整棵树）
+const selectedPathIds = computed(() => selectedPath.value.map((node) => node.id))
+
+// 面包屑显示用：每个节点取 branch_name → title → 占位
+function getBreadcrumbLabel(node: StoryNodeTreeItem) {
+  const label = (node.branch_name || node.title || '').trim()
+  return label || `节点 ${node.id}`
+}
+
 const selectedNodePreview = computed(() => {
   const summary = selectedNode.value?.summary?.trim()
   if (summary) {
@@ -185,28 +194,51 @@ function confirmCreateNode() {
             </div>
           </div>
 
+          <!-- 选中节点指示条：让"现在选中了什么"明确，方便快速续写 -->
+          <div
+            v-if="selectedNode"
+            class="mt-1 flex flex-wrap items-baseline gap-3 px-3 py-2 border border-[var(--line-faint)] bg-[var(--bg-shell)]"
+          >
+            <span class="font-mono text-[0.7rem] tracking-[0.22em] uppercase text-[var(--text-faint)]">
+              SELECTED
+            </span>
+            <span class="font-mono text-[0.85rem] text-[var(--text-secondary)]">
+              NODE-{{ selectedNode.id }}
+            </span>
+            <span class="text-[0.92rem] text-[var(--text-primary)] truncate max-w-[28rem]">
+              {{ selectedNode.title || selectedNode.branch_name || '未命名节点' }}
+            </span>
+          </div>
+
+          <!-- 主操作行：选中节点之后，"续写"是首要动作 -->
           <div class="flex flex-wrap gap-3">
+            <!-- 续写：选中节点后变成最显眼的主按钮 -->
             <n-button
-              v-if="entryNode"
+              v-if="book?.allow_new_nodes && selectedNode"
               type="primary"
-              @click="goToStoryNode(entryNode.id)"
+              size="large"
+              :disabled="!canCreateFromSelectedNode"
+              @click="requestCreateNode"
             >
-              从主干开始阅读
+              从此处续写 →
             </n-button>
+            <!-- 阅读选中节点：次级 -->
             <n-button
               v-if="selectedNode"
               secondary
               type="primary"
               @click="goToStoryNode(selectedNode.id)"
             >
-              查看当前节点正文
+              阅读选中节点
             </n-button>
+            <!-- 主干阅读：选中节点时降级为 quaternary，未选中时仍为 primary 入口 -->
             <n-button
-              v-if="book?.allow_new_nodes && selectedNode"
-              :disabled="!canCreateFromSelectedNode"
-              @click="requestCreateNode"
+              v-if="entryNode"
+              :type="selectedNode ? undefined : 'primary'"
+              :quaternary="!!selectedNode"
+              @click="goToStoryNode(entryNode.id)"
             >
-              创建后续节点
+              {{ selectedNode ? '从主干开始阅读' : '进入主干' }}
             </n-button>
           </div>
         </div>
@@ -222,8 +254,48 @@ function confirmCreateNode() {
     </n-card>
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div class="min-w-0">
-        <story-tree-flow :tree="tree ?? []" :selected-node-id="selectedNodeId" :is-loading="treeLoading" @node-click="selectNode" />
+      <div class="min-w-0 space-y-3">
+        <!-- 面包屑路径条（方案 2）：选中节点深度 > 1 才显示 -->
+        <nav
+          v-if="selectedPath.length > 1"
+          class="tree-lineage"
+          aria-label="从根到选中节点的路径"
+        >
+          <span class="tree-lineage__head">LINEAGE</span>
+          <ol class="tree-lineage__list">
+            <li
+              v-for="(pathNode, idx) in selectedPath"
+              :key="`crumb-${pathNode.id}`"
+              class="tree-lineage__item"
+              :class="{ 'tree-lineage__item--current': idx === selectedPath.length - 1 }"
+            >
+              <button
+                type="button"
+                class="tree-lineage__link"
+                :disabled="idx === selectedPath.length - 1"
+                :aria-current="idx === selectedPath.length - 1 ? 'true' : undefined"
+                @click="selectNode(pathNode.id)"
+              >
+                <span v-if="idx === 0" class="tree-lineage__rank">ROOT</span>
+                <span v-else class="tree-lineage__rank">L{{ idx }}</span>
+                <span class="tree-lineage__label">{{ getBreadcrumbLabel(pathNode) }}</span>
+              </button>
+              <span
+                v-if="idx < selectedPath.length - 1"
+                class="tree-lineage__sep"
+                aria-hidden="true"
+              >→</span>
+            </li>
+          </ol>
+        </nav>
+
+        <story-tree-flow
+          :tree="tree ?? []"
+          :selected-node-id="selectedNodeId"
+          :selected-path-ids="selectedPathIds"
+          :is-loading="treeLoading"
+          @node-click="selectNode"
+        />
       </div>
 
       <story-tree-inspector
@@ -247,3 +319,101 @@ function confirmCreateNode() {
     />
   </div>
 </template>
+
+<style scoped>
+/* —— 面包屑：从根到选中节点的路径（方案 2）—— */
+.tree-lineage {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-faint);
+  background: var(--bg-shell);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tree-lineage__head {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding-right: 12px;
+  border-right: 1px solid var(--line-faint);
+}
+
+.tree-lineage__list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: nowrap;
+}
+
+.tree-lineage__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-lineage__link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 4px 6px;
+  font-family: var(--font-body);
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: color var(--transition-base), background var(--transition-base);
+  white-space: nowrap;
+}
+
+.tree-lineage__link:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-panel);
+}
+
+.tree-lineage__link:disabled {
+  cursor: default;
+}
+
+.tree-lineage__rank {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.tree-lineage__label {
+  color: inherit;
+  max-width: 18ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-lineage__item--current .tree-lineage__link {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.tree-lineage__item--current .tree-lineage__rank {
+  color: var(--text-secondary);
+}
+
+.tree-lineage__sep {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  color: var(--text-faint);
+  user-select: none;
+}
+</style>

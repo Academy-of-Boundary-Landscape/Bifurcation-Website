@@ -36,13 +36,6 @@
   --font-display: "Space Grotesk", "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
   --font-body: "IBM Plex Sans", "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", "Consolas", monospace;
-  /* 衬线字用于文学化的展示场景：首页 hero、引言、节点标题等 */
-  --font-serif: "Fraunces", "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
-
-  /* 暖琥珀色 accent，破纯冷灰，用于首页诗意场景与少量强调 */
-  --accent-amber: #c8a96a;
-  --accent-amber-soft: rgba(200, 169, 106, 0.18);
-  --accent-amber-faint: rgba(200, 169, 106, 0.08);
 
   --transition-fast: 140ms ease;
   --transition-base: 220ms ease;

@@ -1,10 +1,11 @@
+import type { RouteLocationRaw } from 'vue-router'
 import type { StoryNode } from '@/types/models'
 
 export type DiscoveryRailStatus = 'published' | 'pending' | 'archived' | 'neutral'
 
 export interface DiscoveryRailAction {
   label: string
-  to: string
+  to: string | RouteLocationRaw
 }
 
 export interface DiscoveryRailMetric {
@@ -22,6 +23,8 @@ export interface DiscoveryRailItem {
   metrics?: DiscoveryRailMetric[]
   hint?: string
   action: DiscoveryRailAction
+  /** 次级动作（如登录用户的"续写"快捷入口）；不影响 `action` 主按钮 */
+  secondaryAction?: DiscoveryRailAction
   status?: DiscoveryRailStatus
 }
 

@@ -11,6 +11,11 @@ const props = defineProps<{
 function openAction() {
   void router.push(props.item.action.to)
 }
+
+function openSecondaryAction() {
+  if (!props.item.secondaryAction) return
+  void router.push(props.item.secondaryAction.to)
+}
 </script>
 
 <template>
@@ -45,9 +50,19 @@ function openAction() {
 
     <div class="ui-archive-card__footer">
       <span class="discovery-node-card__hint">{{ item.hint }}</span>
-      <n-button type="primary" @click="openAction">
-        {{ item.action.label }}
-      </n-button>
+      <div class="discovery-node-card__actions">
+        <button
+          v-if="item.secondaryAction"
+          type="button"
+          class="discovery-node-card__secondary"
+          @click="openSecondaryAction"
+        >
+          {{ item.secondaryAction.label }}
+        </button>
+        <n-button type="primary" @click="openAction">
+          {{ item.action.label }}
+        </n-button>
+      </div>
     </div>
   </article>
 </template>
@@ -86,5 +101,30 @@ function openAction() {
   font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.discovery-node-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.discovery-node-card__secondary {
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 1px solid var(--line-soft);
+  transition: color var(--transition-base), border-color var(--transition-base);
+}
+
+.discovery-node-card__secondary:hover {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
 }
 </style>

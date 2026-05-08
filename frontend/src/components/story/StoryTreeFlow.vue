@@ -48,6 +48,8 @@ const MAX_ZOOM = 1.8
 const props = defineProps<{
   tree: StoryNodeTreeItem[]
   selectedNodeId?: number | null
+  /** 从根到选中节点的全部节点 ID。长度 > 1 时启用"非路径降亮"。 */
+  selectedPathIds?: number[]
   isLoading?: boolean
 }>()
 
@@ -166,12 +168,25 @@ const selectedNode = computed(() => {
   return nodes.value.find((node) => node.data.sourceId === props.selectedNodeId) ?? null
 })
 
+const pathSet = computed(() => new Set<number>(props.selectedPathIds ?? []))
+// 只在路径长度 > 1（即用户已选了非根节点）时启用降亮，否则全亮
+const hasPathFilter = computed(() => pathSet.value.size > 1)
+
+function isOnPath(sourceId: number) {
+  return pathSet.value.has(sourceId)
+}
+
 const renderedEdges = computed(() => {
   return edges.value
     .map((edge) => {
       const source = nodeMap.value.get(edge.source)
       const target = nodeMap.value.get(edge.target)
       if (!source || !target) return null
+
+      const sourceId = source.data.sourceId
+      const targetId = target.data.sourceId
+      // 边在路径上 = 两端都在 path 集合里
+      const onPath = isOnPath(sourceId) && isOnPath(targetId)
 
       return {
         id: edge.id,
@@ -180,6 +195,7 @@ const renderedEdges = computed(() => {
         x2: target.position.x,
         y2: target.position.y + NODE_HEIGHT / 2,
         sourceChildCount: source.data.childCount,
+        onPath,
         path: [
           `M ${source.position.x + NODE_WIDTH} ${source.position.y + NODE_HEIGHT / 2}`,
           `C ${source.position.x + NODE_WIDTH + 52} ${source.position.y + NODE_HEIGHT / 2},`,
@@ -381,7 +397,11 @@ onBeforeUnmount(() => {
               :key="edge.id"
               :d="edge.path"
               class="story-flow-stage__edge"
-              :class="{ 'story-flow-stage__edge--single-child': edge.sourceChildCount === 1 }"
+              :class="{
+                'story-flow-stage__edge--single-child': edge.sourceChildCount === 1,
+                'story-flow-stage__edge--off-path': hasPathFilter && !edge.onPath,
+                'story-flow-stage__edge--on-path': hasPathFilter && edge.onPath,
+              }"
               filter="url(#story-flow-edge-glow)"
             />
             <circle
@@ -391,6 +411,10 @@ onBeforeUnmount(() => {
               :cy="edge.y2"
               r="2.6"
               class="story-flow-stage__edge-dot"
+              :class="{
+                'story-flow-stage__edge-dot--off-path': hasPathFilter && !edge.onPath,
+                'story-flow-stage__edge-dot--on-path': hasPathFilter && edge.onPath,
+              }"
             />
           </svg>
 
@@ -399,6 +423,10 @@ onBeforeUnmount(() => {
             :key="node.id"
             type="button"
             class="story-flow-stage__node"
+            :class="{
+              'story-flow-stage__node--off-path': hasPathFilter && !isOnPath(node.data.sourceId),
+              'story-flow-stage__node--on-path': hasPathFilter && isOnPath(node.data.sourceId),
+            }"
             :style="{
               left: `${node.position.x}px`,
               top: `${node.position.y}px`,
@@ -475,6 +503,50 @@ onBeforeUnmount(() => {
 .story-flow-stage__edge-dot {
   fill: rgba(239, 242, 245, 0.82);
   opacity: 0.9;
+}
+
+/* —— 路径高亮 / 降亮（方案 1）—— */
+.story-flow-stage__edge,
+.story-flow-stage__edge-dot,
+.story-flow-stage__node {
+  transition: opacity 220ms ease, stroke 220ms ease, filter 220ms ease;
+}
+
+/* 在路径上：保持原色，并加描边权重让它"亮起来" */
+.story-flow-stage__edge--on-path {
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 2;
+}
+
+.story-flow-stage__edge-dot--on-path {
+  fill: rgba(255, 255, 255, 0.95);
+  opacity: 1;
+}
+
+.story-flow-stage__node--on-path {
+  z-index: 2;
+}
+
+/* 不在路径上：降到 28% 透明并去饱和 */
+.story-flow-stage__edge--off-path {
+  stroke: rgba(180, 188, 196, 0.28);
+  stroke-width: 1.2;
+  filter: none;
+}
+
+.story-flow-stage__edge-dot--off-path {
+  fill: rgba(180, 188, 196, 0.32);
+  opacity: 0.5;
+}
+
+.story-flow-stage__node--off-path {
+  opacity: 0.32;
+  filter: grayscale(0.7);
+}
+
+.story-flow-stage__node--off-path:hover {
+  opacity: 0.7;
+  filter: grayscale(0.2);
 }
 
 .story-flow-stage__node {
