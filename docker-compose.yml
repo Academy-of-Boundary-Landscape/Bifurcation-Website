@@ -23,7 +23,7 @@ services:
         max-file: "3"
 
   backend:
-    image: ghcr.io/renko6626/bifurcation-backend:latest  # GHCR 要求全小写
+    image: ghcr.io/academy-of-boundary-landscape/bifurcation-backend:latest  # GHCR 要求全小写
     container_name: bifurcation-backend
     restart: unless-stopped
     depends_on:
