@@ -25,6 +25,7 @@
 ## 记录
 
 - [`changelog.md`](changelog.md) — 改造记录
+- [`followups.md`](followups.md) — **未完成的优化点清单**（代码债、互动功能补全、安全护栏、运维）
 
 ## 文档原则
 

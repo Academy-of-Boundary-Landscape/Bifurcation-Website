@@ -106,6 +106,8 @@ export interface StoryNodeRead extends StoryNode {
   archived_reason: string | null
   reviewed_by?: number | null
   reviewed_at: string | null
+  /** 当前请求用户是否已点赞此节点；匿名访问永远是 false。后端在 GET /node/:id 上注入。 */
+  is_liked: boolean
 }
 
 export interface StoryNodeCreate {

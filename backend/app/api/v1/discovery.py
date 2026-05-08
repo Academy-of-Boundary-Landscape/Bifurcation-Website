@@ -70,7 +70,7 @@ async def get_featured_nodes(
     },
 )
 async def get_latest_feed(
-    book_id: Optional[int] = Query(None, description="[可选] 只看某个活动/书本的动态"),
+    book_id: Optional[int] = Query(None, ge=1, description="[可选] 只看某个活动/书本的动态"),
     skip: int = Query(0, ge=0), # 🛡️ 修复：防止负数导致 500
     limit: int = Query(20, ge=1, le=100), # 🛡️ 修复：防止请求过多数据
     db: AsyncSession = Depends(get_db),
@@ -85,7 +85,9 @@ async def get_latest_feed(
         .order_by(desc(StoryNode.created_at))
     )
 
-    if book_id:
+    # `if book_id is not None` 而不是 `if book_id:`——
+    # 后者会让 book_id=0 被当作未传，静默返回全局 feed
+    if book_id is not None:
         stmt = stmt.where(StoryNode.book_id == book_id)
 
     result = await db.execute(stmt.offset(skip).limit(limit))

@@ -44,6 +44,24 @@ export function useNodeCommentsQuery(nodeId: MaybeRefOrGetter<number>, params?: 
   })
 }
 
+// 评论列表的无限滚动版本：每次拉一页，超过当前页就用 fetchNextPage 续拉
+const COMMENTS_PAGE_SIZE = 20
+export function useInfiniteNodeCommentsQuery(nodeId: MaybeRefOrGetter<number>) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.nodeComments(toValue(nodeId))),
+    queryFn: ({ pageParam }) => fetchNodeComments(toValue(nodeId), {
+      skip: pageParam as number,
+      limit: COMMENTS_PAGE_SIZE,
+    }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < COMMENTS_PAGE_SIZE) return undefined
+      return allPages.length * COMMENTS_PAGE_SIZE
+    },
+    enabled: computed(() => !!toValue(nodeId)),
+  })
+}
+
 export function useCreateCommentMutation() {
   const queryClient = useQueryClient()
   

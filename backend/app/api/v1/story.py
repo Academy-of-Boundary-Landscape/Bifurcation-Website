@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload, defer, raiseload
 
 from app.api import deps
 from app.core.database import get_db
-from app.models.story import NodeStatus, NodeVisibility, StoryNode
+from app.models.story import NodeLike, NodeStatus, NodeVisibility, StoryNode
 from app.models.story_book import StoryBook, BookPhase
 from app.models.user import User, UserRole
 from app.schemas import story as node_schema
@@ -430,7 +430,20 @@ async def get_node_detail(
     if not _is_node_visible(node.status, node.author_id, is_admin, current_user_id):
         raise HTTPException(status_code=403, detail="该内容正在审核中或已归档，无权访问")
 
-    return node
+    # 查询当前用户是否已点赞此节点（匿名访问跳过查询，is_liked 保持默认 False）
+    is_liked = False
+    if current_user_id is not None:
+        like_row = await db.execute(
+            select(NodeLike.id).where(
+                NodeLike.node_id == node.id,
+                NodeLike.user_id == current_user_id,
+            )
+        )
+        is_liked = like_row.scalar_one_or_none() is not None
+
+    response = node_schema.StoryNodeRead.model_validate(node)
+    response.is_liked = is_liked
+    return response
 
 
 @router.get(

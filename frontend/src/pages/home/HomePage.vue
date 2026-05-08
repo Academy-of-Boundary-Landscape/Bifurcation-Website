@@ -294,18 +294,19 @@ function goTo(path: string) {
             </button>
           </div>
 
-          <!-- live telemetry from the queries — replaces the old "Core Mode" cards -->
+          <!-- 显示当前 hero 上能调阅到的样本数（不是站点真实总数）。
+               想要真实总数需要后端开 count 接口；当前是 query.length，受 limit 截断。 -->
           <dl class="hero__telemetry">
             <div class="hero__telem">
-              <dt>FEATURED · 编辑标记</dt>
+              <dt>SHOWN · 编辑标记</dt>
               <dd>{{ fmtCount(totalFeatured) }}</dd>
             </div>
             <div class="hero__telem">
-              <dt>RECENT · 近期入档</dt>
+              <dt>SHOWN · 近期入档</dt>
               <dd>{{ fmtCount(totalLatest) }}</dd>
             </div>
             <div class="hero__telem">
-              <dt>ATTENTION · 高度关注</dt>
+              <dt>SHOWN · 高度关注</dt>
               <dd>{{ fmtCount(totalTrending) }}</dd>
             </div>
           </dl>
@@ -469,17 +470,17 @@ function goTo(path: string) {
     <div class="section-divider">
       <span class="section-divider__num">§04</span>
       <span class="section-divider__rule" />
-      <span class="section-divider__label">ATTENTION / 7-DAY</span>
+      <span class="section-divider__label">ATTENTION / 收到点赞最多</span>
     </div>
 
     <DiscoveryRail
       kicker="§04 / Attention"
-      title="高度关注节点"
-      description="近七日内被反复打开、点赞、续写的节点。"
+      title="收到点赞最多的节点"
+      description="按点赞数排序：优先取近七日发布的；近期内容不足时退到全时榜。"
       :items="trendingItems"
       :loading="trendingLoading"
       :error="trendingError as Error | null"
-      empty-text="近七日尚未形成集中关注。"
+      empty-text="尚无点赞记录。"
     />
 
     <!-- ============ §05 QUERY ============ -->

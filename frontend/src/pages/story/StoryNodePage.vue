@@ -17,7 +17,7 @@ import {
 import {
   useCreateCommentMutation,
   useDeleteCommentMutation,
-  useNodeCommentsQuery,
+  useInfiniteNodeCommentsQuery,
   useToggleLikeMutation,
 } from '@/features/interaction/queries'
 
@@ -31,7 +31,18 @@ const justSubmitted = computed(() => route.query.submitted === '1')
 const { data: node, isLoading } = useNodeDetailQuery(nodeId)
 const { data: path } = useNodePathQuery(nodeId)
 const { data: children } = useNodeChildrenQuery(nodeId, { limit: 5 })
-const { data: comments } = useNodeCommentsQuery(nodeId)
+const {
+  data: commentPages,
+  isFetchingNextPage: loadingMoreComments,
+  hasNextPage: hasMoreComments,
+  fetchNextPage: fetchMoreComments,
+} = useInfiniteNodeCommentsQuery(nodeId)
+// 把所有 page 拍平成一条 flat 列表
+const comments = computed(() => commentPages.value?.pages.flat() ?? [])
+const loadedCommentsCount = computed(() => comments.value.length)
+// 评论总数：优先使用后端 node.comments_count（denormalized 真实总数），
+// 在还没拿到时回退到本地已加载量
+const totalCommentsCount = computed(() => node.value?.comments_count ?? loadedCommentsCount.value)
 
 const { mutate: toggleLike, isPending: togglingLike } = useToggleLikeMutation()
 
@@ -279,8 +290,19 @@ function handleAdminStatusUpdate() {
         </div>
         
         <n-space class="story-node-actions">
-          <n-button type="primary" @click="handleToggleLike" :loading="togglingLike && node?.id === nodeId">
-            👍 {{ node.likes_count ?? 0 }} 赞
+          <!-- 已点赞用 primary（白底）+ 实心心型；未点赞用 secondary 描边 + 空心心型 -->
+          <n-button
+            :type="node.is_liked ? 'primary' : 'default'"
+            :secondary="!node.is_liked"
+            class="story-node-like-btn"
+            :class="{ 'story-node-like-btn--liked': node.is_liked }"
+            @click="handleToggleLike"
+            :loading="togglingLike && node?.id === nodeId"
+          >
+            <span class="story-node-like-btn__icon" aria-hidden="true">
+              {{ node.is_liked ? '♥' : '♡' }}
+            </span>
+            {{ node.likes_count ?? 0 }} {{ node.is_liked ? '已赞' : '点赞' }}
           </n-button>
           <n-button @click="handleCreateChildNode" :disabled="!canCreateChild">
             创建后续节点
@@ -366,7 +388,9 @@ function handleAdminStatusUpdate() {
       
       <n-card class="ui-shell-panel" :bordered="false">
         <template #header>
-          <h2 class="ui-shell-title story-node-section-title">评论区（{{ comments?.length || 0 }}）</h2>
+          <h2 class="ui-shell-title story-node-section-title">
+            评论区（{{ totalCommentsCount }}<template v-if="loadedCommentsCount < totalCommentsCount">·已显示 {{ loadedCommentsCount }}</template>）
+          </h2>
         </template>
         
         <div v-if="authStore.isAuthenticated" class="story-node-comment-form">
@@ -423,8 +447,28 @@ function handleAdminStatusUpdate() {
               <p class="story-node-comment__content">{{ comment.content }}</p>
             </div>
           </div>
+
+          <!-- 加载更多 -->
+          <div v-if="hasMoreComments" class="story-node-comments-more">
+            <n-button
+              quaternary
+              size="medium"
+              :loading="loadingMoreComments"
+              @click="() => void fetchMoreComments()"
+            >
+              加载更多
+              <template v-if="totalCommentsCount > loadedCommentsCount">
+                （还剩 {{ Math.max(0, totalCommentsCount - loadedCommentsCount) }} 条）
+              </template>
+            </n-button>
+          </div>
+          <div v-else-if="loadedCommentsCount > 0" class="story-node-comments-end">
+            <span aria-hidden="true">·</span>
+            已加载全部 {{ totalCommentsCount }} 条
+            <span aria-hidden="true">·</span>
+          </div>
         </div>
-        
+
         <div v-else class="story-node-empty">
           <p class="story-node-muted">暂无评论</p>
           
@@ -491,6 +535,24 @@ function handleAdminStatusUpdate() {
 
 .story-node-actions {
   margin-bottom: 16px;
+}
+
+/* 点赞按钮 */
+.story-node-like-btn__icon {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 1.1em;
+  line-height: 1;
+  transition: transform 220ms ease;
+}
+
+.story-node-like-btn:hover .story-node-like-btn__icon {
+  transform: scale(1.15);
+}
+
+/* 已点赞态：实心心型 + 白底 + 黑字（用现有 primary 颜色，覆盖 type 即可） */
+.story-node-like-btn--liked .story-node-like-btn__icon {
+  color: var(--state-danger);
 }
 
 .story-node-notice {
@@ -631,6 +693,25 @@ function handleAdminStatusUpdate() {
 .story-node-empty {
   padding: 48px 16px;
   text-align: center;
+}
+
+.story-node-comments-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+}
+
+.story-node-comments-end {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 20px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 .story-node-muted {

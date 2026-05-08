@@ -65,6 +65,7 @@ class StoryNodeListItem(BaseModel):
     is_ending: bool
     freeze_interactions: bool
     is_featured: bool
+    feature_rank: Optional[int] = None
 
     published_at: Optional[datetime] = None
     created_at: datetime
@@ -78,6 +79,8 @@ class StoryNodeRead(StoryNodeListItem):
     archived_reason: Optional[str] = None
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[datetime] = None
+    # 当前用户是否已点赞此节点。匿名访问 / 未登录时永远为 False。
+    is_liked: bool = False
 
 
 class StoryNodeTreeItem(StoryNodeListItem):
