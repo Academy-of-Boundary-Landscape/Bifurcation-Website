@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { NCard, NButton, NSpace, NSpin, NAvatar, NInput, NFormItem, NAlert } from 'naive-ui'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { NButton, NInput, NSpin, useMessage } from 'naive-ui'
+import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watch, onBeforeUnmount, onMounted } from 'vue'
 import type { StoryNodeCreate } from '@/types/models'
-import { useMessage } from 'naive-ui'
 import { useCreateStoryNodeMutation, useNodeDetailQuery } from '@/features/story/queries'
 import { getStorage, removeStorage, setStorage } from '@/utils/storage'
 
@@ -59,20 +58,57 @@ const hasMeaningfulDraftContent = computed(() =>
   ),
 )
 
+/* —— 字数状态：50 ~ 2000 是建议区间 —— */
+type LengthTone = 'idle' | 'low' | 'ok' | 'high'
+const lengthTone = computed<LengthTone>(() => {
+  if (contentLength.value === 0) return 'idle'
+  if (contentLength.value < 50) return 'low'
+  if (contentLength.value > 2000) return 'high'
+  return 'ok'
+})
+const lengthHint = computed(() => {
+  switch (lengthTone.value) {
+    case 'idle':
+      return '建议 50~2000 字'
+    case 'low':
+      return '建议至少 50 字'
+    case 'high':
+      return '已超过建议上限 2000 字'
+    default:
+      return '区间良好'
+  }
+})
+
+/* —— 草稿状态文字 —— */
 const draftStatusText = computed(() => {
-  if (!hasMeaningfulDraftContent.value) {
-    return '尚未生成本地草稿'
-  }
-
-  if (draftSaveState.value === 'saving') {
-    return '正在保存本地草稿...'
-  }
-
+  if (!hasMeaningfulDraftContent.value) return '尚无草稿'
+  if (draftSaveState.value === 'saving') return '草稿保存中…'
   if (lastSavedAt.value) {
-    return `本地草稿已保存于 ${new Date(lastSavedAt.value).toLocaleString('zh-CN')}`
+    const diffSec = Math.max(0, Math.floor((Date.now() - new Date(lastSavedAt.value).getTime()) / 1000))
+    if (diffSec < 5) return '草稿已保存'
+    if (diffSec < 60) return `草稿保存于 ${diffSec} 秒前`
+    if (diffSec < 3600) return `草稿保存于 ${Math.floor(diffSec / 60)} 分钟前`
+    return `草稿保存于 ${new Date(lastSavedAt.value).toLocaleString('zh-CN')}`
   }
+  return '草稿已保存'
+})
 
-  return '本地草稿已保存'
+/* —— 顶部 strip 元数据 —— */
+const todayStamp = (() => {
+  const d = new Date()
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+})()
+
+const parentMeta = computed(() => {
+  if (!parentNode.value) return null
+  return {
+    id: parentNode.value.id,
+    author: parentNode.value.author?.username ?? 'unknown',
+    title: parentNode.value.branch_name || parentNode.value.title || '',
+    date: parentNode.value.created_at
+      ? new Date(parentNode.value.created_at).toLocaleDateString('zh-CN')
+      : '',
+  }
 })
 
 function buildDraftRecord(): StoryDraftRecord {
@@ -105,7 +141,6 @@ function saveDraftImmediately() {
     clearDraft()
     return
   }
-
   const draftRecord = buildDraftRecord()
   draftSaveState.value = 'saving'
   setStorage(getDraftKey(), draftRecord)
@@ -124,7 +159,6 @@ function scheduleDraftSave() {
 function restoreDraft() {
   const savedDraft = getStorage<StoryDraftRecord>(getDraftKey())
   if (!savedDraft?.data) return
-
   formData.value = {
     ...formData.value,
     ...savedDraft.data,
@@ -205,22 +239,21 @@ function handleBack() {
 
 function handleSubmit() {
   if (!formData.value.content.trim()) {
-    message.error('内容不能为空')
+    message.error('正文不能为空')
     return
   }
-
   if (contentLength.value < 50) {
-    message.warning('内容过短，建议至少50字')
+    message.warning('内容过短，建议至少 50 字')
   }
 
   createNode(formData.value, {
     onSuccess: (data) => {
-      message.success('创作提交成功，等待审核')
+      message.success('提交成功，进入审核流程')
       clearDraft()
       void router.push({ name: 'story-node', params: { nodeId: data.id }, query: { submitted: '1' } })
     },
     onError: (error) => {
-      message.error('创作提交失败，请重试')
+      message.error('提交失败，请重试')
       console.error('提交失败:', error)
     },
   })
@@ -230,7 +263,7 @@ function handleDiscardDraft() {
   clearDraft()
   wasRestoredFromDraft.value = false
   resetForm()
-  message.success('本地草稿已清除')
+  message.success('草稿已清除')
 }
 
 onBeforeUnmount(() => {
@@ -243,277 +276,503 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="story-write-page">
-    <n-spin :show="isParentLoading">
-      <n-space vertical :size="24">
-        <n-card v-if="parentNode" class="ui-shell-panel" :bordered="false">
-          <template #header>
-            <h2 class="ui-shell-title">前文摘要</h2>
-          </template>
+  <div class="write">
+    <!-- ============ 顶部 sticky 工作条 ============ -->
+    <header class="write__strip">
+      <div class="write__strip-left">
+        <span class="write__strip-cell">§WRITE</span>
+        <span v-if="parentId" class="write__strip-cell">续写自 NODE-{{ parentId }}</span>
+        <span v-else class="write__strip-cell">主干起点</span>
+        <span v-if="parentMeta?.author" class="write__strip-cell write__strip-cell--soft">@{{ parentMeta.author }}</span>
+        <span class="write__strip-cell write__strip-cell--soft">{{ todayStamp }}</span>
+      </div>
 
-          <div class="story-write-summary">
-            <n-avatar :size="32">
-              {{ parentNode.author?.username?.charAt(0).toUpperCase() }}
-            </n-avatar>
-            <div>
-              <h3 class="story-write-summary__title">{{ parentNode.title || parentNode.branch_name || '无标题' }}</h3>
-              <p class="story-write-muted">作者: {{ parentNode.author?.username }} | {{ new Date(parentNode.created_at).toLocaleDateString('zh-CN') }}</p>
+      <div class="write__strip-right">
+        <span class="write__draft-status" :data-state="draftSaveState">
+          <span class="write__draft-dot" aria-hidden="true" />
+          {{ draftStatusText }}
+        </span>
+        <button
+          v-if="hasMeaningfulDraftContent"
+          type="button"
+          class="write__strip-link"
+          @click="handleDiscardDraft"
+        >
+          清除草稿
+        </button>
+        <n-button class="write__strip-back" @click="handleBack" size="medium">
+          返回
+        </n-button>
+        <n-button
+          class="write__strip-submit"
+          type="primary"
+          size="medium"
+          :loading="isCreating"
+          :disabled="isCreating || !formData.content.trim()"
+          @click="handleSubmit"
+        >
+          提交后续节点 →
+        </n-button>
+      </div>
+    </header>
+
+    <!-- ============ 双栏工作区 ============ -->
+    <n-spin :show="isParentLoading" class="write__spin">
+      <div class="write__grid">
+        <!-- ── 左栏：parent 完整正文 ── -->
+        <aside class="write__read" aria-label="上文（parent 正文）">
+          <div class="write__read-head">
+            <p class="write__col-kicker">PARENT · 上文</p>
+            <h2 class="write__read-title">
+              {{ parentMeta?.title || (parentId ? '未命名节点' : '这本书的第一个节点') }}
+            </h2>
+            <p v-if="parentMeta" class="write__read-meta">
+              <span>NODE-{{ parentMeta.id }}</span>
+              <span v-if="parentMeta.author">@{{ parentMeta.author }}</span>
+              <span v-if="parentMeta.date">{{ parentMeta.date }}</span>
+            </p>
+            <p v-else class="write__read-meta">
+              <span>ROOT</span>
+              <span>BOOK-{{ bookId }}</span>
+            </p>
+          </div>
+
+          <div class="write__read-body">
+            <div v-if="parentNode" class="write__read-content">{{ parentNode.content }}</div>
+            <p v-else-if="!parentId" class="write__read-empty">
+              这是这本书的第一个节点。你写下的内容将成为整棵故事树的根，从此往后所有分支都从这里生长。
+            </p>
+            <p v-else class="write__read-empty">
+              正在加载上文……
+            </p>
+          </div>
+        </aside>
+
+        <!-- ── 右栏：写作表单 ── -->
+        <section class="write__form" aria-label="续写表单">
+          <p class="write__col-kicker">YOUR ENTRY · 续写</p>
+
+          <div v-if="wasRestoredFromDraft" class="write__notice">
+            已恢复本地草稿。继续编辑，提交后会自动清除。
+          </div>
+
+          <label class="write__field">
+            <span class="write__field-label">分支名（可选）</span>
+            <n-input
+              v-model:value="formData.branch_name"
+              placeholder="例如：平行世界的相遇"
+              class="write__input"
+              :maxlength="60"
+              show-count
+            />
+          </label>
+
+          <label class="write__field">
+            <span class="write__field-label">标题（可选）</span>
+            <n-input
+              v-model:value="formData.title"
+              placeholder="为这一节起个名字"
+              class="write__input"
+              :maxlength="80"
+              show-count
+            />
+          </label>
+
+          <label class="write__field write__field--grow">
+            <span class="write__field-label">
+              <span>正文</span>
+              <span class="write__field-required">必填</span>
+            </span>
+            <n-input
+              v-model:value="formData.content"
+              type="textarea"
+              placeholder="开始你的续写……"
+              class="write__textarea"
+              :autosize="{ minRows: 14 }"
+            />
+            <div class="write__counter" :data-tone="lengthTone">
+              <span class="write__counter-num">{{ contentLength }}</span>
+              <span class="write__counter-sep">/</span>
+              <span class="write__counter-hint">{{ lengthHint }}</span>
             </div>
-          </div>
+          </label>
 
-          <div class="story-write-excerpt">
-            {{ parentNode.content.substring(0, 300) }}{{ parentNode.content.length > 300 ? '...' : '' }}
-          </div>
-
-          <div class="story-write-footer">
-            <RouterLink
-              :to="`/story/node/${parentNode.id}`"
-              class="story-write-link"
-            >
-              查看完整前文 →
-            </RouterLink>
-          </div>
-        </n-card>
-
-        <n-card class="ui-shell-panel" :bordered="false">
-          <template #header>
-            <h2 class="ui-shell-title">创建后续节点</h2>
-          </template>
-
-          <div class="space-y-4">
-            <n-alert type="info" :bordered="false" class="story-write-draft-status">
-              <div class="story-write-draft-status__content">
-                <div>
-                  <p class="story-write-draft-status__title">本地草稿保护已开启</p>
-                  <p class="story-write-draft-status__text">{{ draftStatusText }}</p>
-                </div>
-                <n-button
-                  v-if="hasMeaningfulDraftContent"
-                  tertiary
-                  size="small"
-                  @click="handleDiscardDraft"
-                >
-                  清除草稿
-                </n-button>
-              </div>
-            </n-alert>
-
-            <n-alert
-              v-if="wasRestoredFromDraft"
-              type="success"
-              :bordered="false"
-              class="story-write-draft-status"
-            >
-              已恢复本地草稿。你可以继续编辑，提交成功后这份草稿会自动清除。
-            </n-alert>
-
-            <div class="story-write-muted">
-              <p>您正在从「{{ parentNode?.title || parentNode?.branch_name || '该节点' }}」继续创作新的后续节点。</p>
-              <p>您可以延续现有走向，也可以写出新的可能性；分支名称现在是可选信息，而不是另一种独立操作。</p>
-            </div>
-
-            <div class="story-write-rules">
-              <h3 class="story-write-rules__title">创作要求</h3>
-              <ul class="story-write-rules__list">
-                <li>内容需符合世界观设定</li>
-                <li>建议字数：50-2000字</li>
-                <li>禁止包含违法不良信息</li>
-              </ul>
-            </div>
-          </div>
-        </n-card>
-
-        <n-card class="ui-shell-panel" :bordered="false">
-          <template #header>
-            <h2 class="ui-shell-title">创作内容</h2>
-          </template>
-
-          <div class="space-y-6">
-            <n-form-item label="分支名称（可选）">
-              <n-input
-                v-model:value="formData.branch_name"
-                placeholder="例如：平行世界的相遇"
-                class="w-full"
-              />
-            </n-form-item>
-
-            <n-form-item label="标题（可选）">
-              <n-input
-                v-model:value="formData.title"
-                placeholder="为您的创作添加一个标题"
-                class="w-full"
-              />
-            </n-form-item>
-
-            <n-form-item label="正文内容" required>
-              <n-input
-                v-model:value="formData.content"
-                type="textarea"
-                placeholder="开始您的创作..."
-                :rows="12"
-                class="w-full"
-              />
-              <div class="story-write-counter">
-                <span>字数: {{ contentLength }}</span>
-                <span v-if="contentLength < 50" class="text-yellow-400">建议至少50字</span>
-                <span v-else-if="contentLength > 2000" class="text-red-400">超过2000字</span>
-              </div>
-            </n-form-item>
-          </div>
-        </n-card>
-
-        <n-card class="ui-shell-panel" :bordered="false">
-          <div class="story-write-actions">
-            <div class="story-write-muted">
-              <p>您的创作将进入审核流程，通过后即可发布</p>
-              <p class="story-write-muted__sub">内容会自动保存到当前浏览器。误刷新或临时离开后，返回这里即可恢复继续创作。</p>
-            </div>
-
-            <n-space>
-              <n-button @click="handleBack" size="large">
-                返回
-              </n-button>
-              <n-button
-                type="primary"
-                size="large"
-                @click="handleSubmit"
-                :loading="isCreating"
-                :disabled="isCreating"
-              >
-                提交后续节点
-              </n-button>
-            </n-space>
-          </div>
-        </n-card>
-      </n-space>
+          <p class="write__footnote">
+            提交后会进入审核（status: PEND），管理员通过后正式入档（PUB）。
+            内容自动保存到当前浏览器，刷新或临时离开都不会丢。
+          </p>
+        </section>
+      </div>
     </n-spin>
   </div>
 </template>
 
 <style scoped>
-.story-write-page {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 24px 16px 40px;
-}
-
-.story-write-summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.story-write-summary__title {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.story-write-muted {
-  color: var(--text-muted);
-  line-height: 1.75;
-}
-
-.story-write-muted__sub {
-  margin-top: 2px;
-  font-size: 13px;
-}
-
-.story-write-excerpt {
-  color: var(--text-primary);
-  line-height: 1.9;
-  white-space: pre-wrap;
-}
-
-.story-write-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.story-write-link {
-  color: var(--accent-cool);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 12px;
-}
-
-.story-write-draft-status {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.story-write-draft-status__content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.story-write-draft-status__title {
-  margin: 0 0 4px;
-  color: var(--text-primary);
-  font-size: 0.96rem;
-}
-
-.story-write-draft-status__text {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  line-height: 1.7;
-}
-
-.story-write-rules {
-  padding: 16px;
-  border: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.story-write-rules__title {
-  margin: 0 0 8px;
-  color: var(--text-primary);
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.story-write-rules__list {
-  margin: 0;
-  padding-left: 20px;
-  display: grid;
-  gap: 6px;
-  color: var(--text-muted);
-}
-
-.story-write-counter {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.story-write-actions {
+/* ─────────────────────────────────────────────
+   外层
+   ───────────────────────────────────────────── */
+.write {
+  min-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
-@media (min-width: 640px) {
-  .story-write-actions {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
+.write__spin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.write__spin :deep(.n-spin-content) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─────────────────────────────────────────────
+   顶部 sticky 工作条
+   ───────────────────────────────────────────── */
+.write__strip {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 14px clamp(20px, 4vw, 48px);
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--line-soft);
+  backdrop-filter: blur(8px);
+}
+
+.write__strip-left,
+.write__strip-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.write__strip-cell--soft {
+  color: var(--text-faint);
+}
+
+.write__draft-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.write__draft-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: background var(--transition-base);
+}
+
+.write__draft-status[data-state="saving"] .write__draft-dot {
+  background: var(--state-warning);
+  animation: write-pulse 1.4s ease-in-out infinite;
+}
+
+.write__draft-status[data-state="saved"] .write__draft-dot {
+  background: var(--state-success);
+}
+
+.write__strip-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color var(--transition-base);
+}
+
+.write__strip-link:hover {
+  color: var(--state-danger);
+}
+
+.write__strip-back {
+  --n-color: transparent !important;
+  --n-color-hover: var(--bg-panel) !important;
+  --n-text-color: var(--text-secondary) !important;
+  --n-text-color-hover: var(--text-primary) !important;
+  --n-border: 1px solid var(--line-soft) !important;
+  --n-border-hover: 1px solid var(--line-strong) !important;
+  font-family: var(--font-body) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 2px !important;
+}
+
+.write__strip-submit {
+  --n-color: var(--text-primary) !important;
+  --n-color-hover: #ffffff !important;
+  --n-color-pressed: #d8d8d8 !important;
+  --n-text-color: #050505 !important;
+  --n-text-color-hover: #050505 !important;
+  --n-text-color-pressed: #050505 !important;
+  --n-border: none !important;
+  --n-border-hover: none !important;
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 2px !important;
+}
+
+/* ─────────────────────────────────────────────
+   双栏布局
+   ───────────────────────────────────────────── */
+.write__grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .write__grid {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   }
 }
 
-@media (max-width: 640px) {
-  .story-write-draft-status__content {
-    flex-direction: column;
-    align-items: flex-start;
+/* 共用：列内通用 kicker */
+.write__col-kicker {
+  margin: 0 0 18px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* ─────────────────────────────────────────────
+   左栏：上文阅读
+   ───────────────────────────────────────────── */
+.write__read {
+  position: relative;
+  padding: clamp(28px, 4vw, 56px) clamp(24px, 4vw, 48px);
+  border-bottom: 1px solid var(--line-faint);
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .write__read {
+    border-bottom: 0;
+    border-right: 1px solid var(--line-faint);
+    /* 让左栏在 viewport 内独立滚动 */
+    position: sticky;
+    top: 64px;
+    height: calc(100vh - 64px - 80px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
+.write__read-head {
+  margin-bottom: clamp(20px, 3vw, 32px);
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-faint);
+}
+
+.write__read-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.4rem, 2.6vw, 1.9rem);
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.write__read-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.write__read-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.write__read-content {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.95;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  /* 左栏正文最大宽度，避免阅读时太宽 */
+  max-width: 60ch;
+}
+
+.write__read-empty {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+  max-width: 50ch;
+}
+
+/* ─────────────────────────────────────────────
+   右栏：续写表单
+   ───────────────────────────────────────────── */
+.write__form {
+  padding: clamp(28px, 4vw, 56px) clamp(24px, 4vw, 48px);
+  background: var(--bg-shell);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-height: 0;
+}
+
+.write__notice {
+  padding: 10px 14px;
+  border-left: 2px solid var(--text-primary);
+  background: var(--bg-panel);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.write__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.write__field--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.write__field-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.write__field-required {
+  color: var(--text-secondary);
+}
+
+.write__input :deep(.n-input__input-el),
+.write__input :deep(.n-input__placeholder) {
+  font-family: var(--font-body) !important;
+  font-size: 0.96rem !important;
+}
+
+.write__textarea {
+  flex: 1;
+}
+
+.write__textarea :deep(.n-input__textarea-el),
+.write__textarea :deep(.n-input__placeholder) {
+  font-family: var(--font-body) !important;
+  font-size: 1rem !important;
+  line-height: 1.85 !important;
+}
+
+.write__counter {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.write__counter-num {
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  font-feature-settings: "tnum" 1;
+}
+
+.write__counter-sep {
+  color: var(--text-faint);
+}
+
+.write__counter-hint {
+  color: var(--text-muted);
+}
+
+.write__counter[data-tone="low"] .write__counter-num,
+.write__counter[data-tone="low"] .write__counter-hint {
+  color: var(--state-warning);
+}
+
+.write__counter[data-tone="high"] .write__counter-num,
+.write__counter[data-tone="high"] .write__counter-hint {
+  color: var(--state-danger);
+}
+
+.write__counter[data-tone="ok"] .write__counter-hint {
+  color: var(--state-success);
+}
+
+.write__footnote {
+  margin: 4px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+  color: var(--text-faint);
+  max-width: 60ch;
+}
+
+/* ─────────────────────────────────────────────
+   动画
+   ───────────────────────────────────────────── */
+@keyframes write-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .write__draft-dot,
+  .write__strip-back,
+  .write__strip-submit {
+    transition: none !important;
+    animation: none !important;
   }
 }
 </style>
