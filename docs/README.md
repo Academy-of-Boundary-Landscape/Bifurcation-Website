@@ -22,6 +22,11 @@
 
 - [`deployment.md`](deployment.md) — **从零开始的部署清单**（GitHub / Casdoor / 服务器 Docker / Nginx + HTTPS）
 
+## 审阅
+
+- [`review/00-overview.md`](review/00-overview.md) — **前端审阅总览（2026-06-02）**：跨册共性主题与落地优先级
+- `review/01`~`06` — 按页面/横切分册的详细审阅意见
+
 ## 记录
 
 - [`changelog.md`](changelog.md) — 改造记录
