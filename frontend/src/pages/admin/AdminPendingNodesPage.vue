@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { NAvatar, NButton, NEmpty, NInput, NSelect, NSpin, NTag } from 'naive-ui'
 import { useMessage } from 'naive-ui'
 
-import { useAdminNodesQuery, useAuditStoryNodeMutation } from '@/features/admin/queries'
+import { useAdminNodesQuery, useAdminStatsQuery, useAuditStoryNodeMutation } from '@/features/admin/queries'
 import type { NodeStatus } from '@/types/models'
 import { storyStatusLabel } from '@/utils/storyStatus'
 
@@ -45,9 +45,12 @@ const actionOptions = [
   { label: '设为已归档', value: 'archived' },
 ]
 
-const totalNodes = computed(() => adminNodes.value?.length ?? 0)
-const pendingCount = computed(() => adminNodes.value?.filter((node) => node.status === 'pending').length ?? 0)
-const archivedCount = computed(() => adminNodes.value?.filter((node) => node.status === 'archived').length ?? 0)
+// hero 指标用 /admin/stats 的全站真实总数（按筛选的命中数见列表 / Phase B 的 X-Total-Count），
+// 不再用被 limit 截断的当前列表 .length 冒充总数
+const { data: adminStats } = useAdminStatsQuery()
+const totalNodes = computed(() => adminStats.value?.nodes.total ?? adminNodes.value?.length ?? 0)
+const pendingCount = computed(() => adminStats.value?.nodes.pending ?? adminNodes.value?.filter((node) => node.status === 'pending').length ?? 0)
+const archivedCount = computed(() => adminStats.value?.nodes.archived ?? adminNodes.value?.filter((node) => node.status === 'archived').length ?? 0)
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '-'
@@ -155,7 +158,7 @@ function handleApply(nodeId: number, currentStatus: NodeStatus) {
         </div>
         <div class="admin-hero__metrics">
           <div class="ui-metric-card">
-            <p class="ui-metric-card__label">当前结果</p>
+            <p class="ui-metric-card__label">节点总数</p>
             <p class="ui-metric-card__value">{{ totalNodes }}</p>
           </div>
           <div class="ui-metric-card">

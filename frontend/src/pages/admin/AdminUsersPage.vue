@@ -13,7 +13,7 @@ import {
 import { useMessage } from 'naive-ui'
 
 import type { UserRole } from '@/types/models'
-import { useAdminUpdateUserMutation, useAdminUsersQuery } from '@/features/admin/queries'
+import { useAdminStatsQuery, useAdminUpdateUserMutation, useAdminUsersQuery } from '@/features/admin/queries'
 
 const message = useMessage()
 
@@ -54,7 +54,9 @@ const roleOptions: Array<{ label: string; value: UserRole }> = [
   { label: '封禁', value: 'banned' },
 ]
 
-const totalUsers = computed(() => users.value?.length ?? 0)
+// 全站真实用户总数来自 /admin/stats（按筛选命中数见 Phase B 的 X-Total-Count），不用截断列表 .length
+const { data: adminStats } = useAdminStatsQuery()
+const totalUsers = computed(() => adminStats.value?.users.total ?? users.value?.length ?? 0)
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '-'
@@ -157,7 +159,7 @@ function handleRefresh() {
         </div>
         <div class="admin-hero__metrics">
           <div class="ui-metric-card">
-            <p class="ui-metric-card__label">Visible Users</p>
+            <p class="ui-metric-card__label">用户总数</p>
             <p class="ui-metric-card__value">{{ totalUsers }}</p>
           </div>
         </div>

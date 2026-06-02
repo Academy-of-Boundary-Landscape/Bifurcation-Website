@@ -169,7 +169,7 @@ function handleStartWriting() {
             </div>
             <div class="ui-metric-card">
               <p class="ui-metric-card__label">Nodes</p>
-              <p class="ui-metric-card__value">{{ submittedNodes?.length || 0 }}</p>
+              <p class="ui-metric-card__value">{{ user?.nodes_count ?? 0 }}</p>
             </div>
           </div>
         </div>

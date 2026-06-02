@@ -333,7 +333,7 @@ function handleAdminStatusUpdate() {
 
       <n-card v-if="children && children.length > 0" class="ui-shell-panel" :bordered="false">
         <template #header>
-          <h2 class="ui-shell-title story-node-section-title">子分支（{{ children.length }}）</h2>
+          <h2 class="ui-shell-title story-node-section-title">子分支（{{ node?.children_count ?? children.length }}）</h2>
         </template>
         
         <div class="space-y-4">
@@ -370,7 +370,7 @@ function handleAdminStatusUpdate() {
       
       <n-card v-if="node && (!children || children.length === 0)" class="ui-shell-panel" :bordered="false">
         <template #header>
-          <h2 class="ui-shell-title story-node-section-title">子分支（{{ children?.length || 0 }}）</h2>
+          <h2 class="ui-shell-title story-node-section-title">子分支（{{ node?.children_count ?? 0 }}）</h2>
         </template>
         
         <div class="story-node-empty">

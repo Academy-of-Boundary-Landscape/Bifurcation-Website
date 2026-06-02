@@ -26,6 +26,9 @@
 
 - [`review/00-overview.md`](review/00-overview.md) — **前端审阅总览（2026-06-02）**：跨册共性主题与落地优先级
 - `review/01`~`06` — 按页面/横切分册的详细审阅意见
+- [`backend-review/00-overview.md`](backend-review/00-overview.md) — **后端审阅总览（2026-06-02）**：「指标说谎」与前后端协同、优化顺序
+- [`backend-review/02-frontend-needs-and-metric-lying.md`](backend-review/02-frontend-needs-and-metric-lying.md) — 前端指标真实/说谎/缺失分类
+- [`backend-review/03-backend-core-correctness.md`](backend-review/03-backend-core-correctness.md) — 后端计数完整性、trending、聚合一致性
 
 ## 记录
 
