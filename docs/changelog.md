@@ -2,6 +2,15 @@
 
 ## 2026-06-02
 
+### 诚实指标（前后端协同，来自 `docs/backend-review/`）
+
+- **Phase A 零成本（前端）**：ProfilePage「Nodes」改用 `user.nodes_count`、StoryNodePage「子分支(N)」改用 `node.children_count`、后台节点/用户 hero 改用 `/admin/stats`——不再用被 limit 截断的当前页 `.length` 冒充总数。
+- **Phase C 计数完整性（后端，TDD）**：点赞/评论/子节点 6 处计数改为原子 SQL（`x=x±1`，减法 `case` 防负），消除并发丢更新；`children_count` 统一为"非归档子节点"并在审核归档/恢复时增减；`/auth/me` 的 `nodes_count` 对齐为只数已发布；`/admin/stats` 活跃用户排除封禁并新增 `banned`；新增对账脚本 `backend/scripts/recount.py`。
+- **Phase B 总数契约（前后端）**：列表端点保持裸 `List` body，通过响应头 `X-Total-Count` 暴露真实总数（discovery×4 / notifications / books，CORS 已 expose）；前端 `getList<T>` 读取，修正首页 telemetry、搜索「MATCHED N」、通知页「Total」、书列表「Books」。
+- 验证：后端 `pytest` 35 passed（含原子计数 / 排除封禁 / X-Total-Count 集成断言）；前端 `type-check` + `build` 通过。
+
+### 前端代码清洗
+
 - 前端代码清洗（来自 `docs/review/00-overview.md` 主题 A/F/G）：删除 20 个文件、净减约 3700 行，`npm run type-check` 与 `npm run build` 均通过。删除前对每个符号都用 `git grep` 二次验证零引用，并纠正了审阅的两处误报（`UserAvatar.vue` 实际在用已保留；不存在所谓"仓库根 frontend/ 未跟踪副本"）。
 - 删除已验证零引用的整组组件：`components/common/{ConfirmDialog,EmptyState,ErrorBlock,LoadingBlock,PageTitle,AppFooter}.vue`、整个 `components/editor/*`（5 个，含带 `alert()`/坏 `DraftGuard` 的死实现）、`components/story/StoryTreePanel.vue`。
 - 删除零引用的 store / util / composable：`stores/counter.ts`、`stores/ui.ts`、`utils/validation.ts`（整文件，写作页有自己的内联校验）、`composables/usePageTitle.ts`。

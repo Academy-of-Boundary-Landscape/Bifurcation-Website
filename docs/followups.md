@@ -8,19 +8,11 @@
 
 ## 1. 代码债（来自 review）
 
-### 1.1 计数原子化（review Critical-adjacent）
+### 1.1 计数原子化 ✅ 已完成（2026-06-02）
 
-`backend/app/services/interactions.py` 的两处 read-modify-write 在并发下会丢计数：
+点赞/评论/子节点共 6 处 read-modify-write 已改为原子 SQL（`x=x±1`，减法用 `case` 防负），并新增对账脚本 `backend/scripts/recount.py`。详见 `changelog.md` 2026-06-02。原文保留为历史背景：原 `interactions.py` 两处 + 删评/删节点/建节点三处都会在并发下丢计数，且 leaderboard/trending 直接吃这些字段。
 
-| 位置 | 现状 | 修法 |
-|---|---|---|
-| `toggle_story_node_like` line 47, 43 | `node.likes_count += 1` / `-= 1` | `await db.execute(update(StoryNode).where(StoryNode.id == node_id).values(likes_count=StoryNode.likes_count + 1))` |
-| `create_story_comment` line 92 | `node.comments_count += 1` | 同上模式 |
-
-**减号要兜底防负数**：用 `func.greatest(StoryNode.likes_count - 1, 0)`（PG）或 `case`（SQLite）。
-**返回值要刷新**：`commit()` 之后 ORM 实例还是旧值，要 `await db.refresh(node, attribute_names=["likes_count"])`。
-
-**评估触发频率**：当前流量下这个 bug 几乎不会触发；做 leaderboard / "热门"功能之前必须修，因为 leaderboard 排序直接吃这两个字段。
+> 关联仍开放项：§2.6 trending 时间衰减（本轮只修了兜底判定与总数口径，未实现 velocity/HN 公式）。
 
 ### 1.2 `MessageResponse` 重复定义
 

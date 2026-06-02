@@ -10,6 +10,12 @@
 
 ---
 
+> **执行进展（2026-06-02）**：A+C+B 全部落地，见 `../changelog.md`。
+> - ✅ A 类零成本：4 处前端改用已存在真值。
+> - ✅ C 类计数完整性：6 处计数原子化 + `children_count` 归档回收 + `nodes_count` 口径对齐 + `/admin/stats` 排除封禁 + 对账脚本。
+> - ✅ B 类总数契约：discovery×4 / notifications / books 走 `X-Total-Count`（非破坏），前端 `getList` 消费；首页/搜索/通知/书列表的说谎点已修。
+> - ⬜ 仍开放：trending 时间衰减真热度公式（§2.6）、admin 列表"按筛选命中数"（后端 header 已可扩展，前端 hero 暂用全站 stats）、UNLISTED 可见性维度。
+
 ## 一句话结论
 
 **"指标说谎"不是某个页面的 bug，而是一个契约缺口叠加一个数据完整性缺口：**
