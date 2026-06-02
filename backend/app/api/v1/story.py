@@ -6,7 +6,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
-from sqlalchemy import desc, select, text, or_
+from sqlalchemy import desc, select, text, or_, update, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, defer, raiseload
 
@@ -583,15 +583,13 @@ async def delete_story_node(
         node.archived_reason = "用户主动删除"
         db.add(node)
         
-        # 删除节点时同步回收父节点 children_count，避免负值
+        # 原子回收父节点 children_count（仅统计 status != ARCHIVED 的子节点），防负
         if node.parent_id is not None:
-            parent_node = await db.get(StoryNode, node.parent_id)
-            if parent_node:
-                if parent_node.children_count is None:
-                    parent_node.children_count = 0
-                elif parent_node.children_count > 0:
-                    parent_node.children_count -= 1
-                db.add(parent_node)
+            await db.execute(
+                update(StoryNode)
+                .where(StoryNode.id == node.parent_id)
+                .values(children_count=case((StoryNode.children_count > 0, StoryNode.children_count - 1), else_=0))
+            )
         
         await db.commit()
     except Exception as e:

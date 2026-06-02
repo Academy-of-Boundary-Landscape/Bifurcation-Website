@@ -152,6 +152,7 @@ export interface AdminDashboardStats {
   users: {
     total: number
     active: number
+    banned: number
     inactive: number
     new_7d: number
   }

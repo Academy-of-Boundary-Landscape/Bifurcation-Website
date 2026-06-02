@@ -10,7 +10,7 @@ from app.core import security
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
-from app.models.story import StoryNode, NodeLike
+from app.models.story import StoryNode, NodeLike, NodeStatus
 from app.schemas import user as user_schema
 from app.schemas import sso as sso_schema
 from app.services.sso import build_sso_login_url, exchange_sso_code
@@ -70,6 +70,7 @@ async def read_users_me(
     nodes_count = (
         select(func.count(StoryNode.id))
         .where(StoryNode.author_id == user.id)
+        .where(StoryNode.status == NodeStatus.PUBLISHED)
     )
     nodes_count = (await db.execute(nodes_count)).scalar() or 0
     # 用户收到的点赞总数

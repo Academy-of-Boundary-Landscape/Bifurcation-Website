@@ -43,6 +43,9 @@ class ExecuteResult:
     def scalar(self) -> Any:
         return self._scalar
 
+    def scalar_one_or_none(self) -> Any:
+        return self._scalar
+
 
 class SyncSessionAdapter:
     def __init__(self, session: Session):

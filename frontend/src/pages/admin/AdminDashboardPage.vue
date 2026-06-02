@@ -33,7 +33,7 @@ const statCards = computed(() => [
   {
     label: '活跃用户',
     value: stats.value?.users.active ?? 0,
-    hint: '当前可正常登录用户',
+    hint: `已排除 ${stats.value?.users.banned ?? 0} 名封禁用户`,
     actionLabel: '用户管理',
     routeName: 'admin-users',
   },

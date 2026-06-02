@@ -54,7 +54,8 @@ class TestInteractionFlows(BackendAsyncTestCase):
 
         db = AsyncMock()
         db.get = AsyncMock(return_value=node)
-        db.execute = AsyncMock(return_value=ExecuteResult(first=None))
+        # 点赞数现在用原子 SQL 自增 + 提交后重新查询；mock 让重新查询的 scalar() 返回 1
+        db.execute = AsyncMock(return_value=ExecuteResult(first=None, scalar=1))
         db.add = Mock()
         db.commit = AsyncMock()
 
@@ -128,7 +129,8 @@ class TestInteractionFlows(BackendAsyncTestCase):
 
         self.assertEqual(result.id, 21)
         self.assertEqual(result.content, "Great branch")
-        self.assertEqual(node.comments_count, 1)
+        # comments_count 现在用原子 SQL 自增（不再就地修改 ORM 对象）；真实计数行为由 SQLite 集成测试覆盖
+        db.execute.assert_awaited()
         db.commit.assert_awaited_once()
         notify_mock.assert_awaited_once()
 

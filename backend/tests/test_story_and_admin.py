@@ -9,7 +9,7 @@ from app.api.v1.admin import admin_dashboard_stats, audit_node
 from app.api.v1.discovery import get_featured_nodes, get_latest_feed, get_trending_nodes, search_nodes
 from app.api.v1.story import create_story_node, get_node_detail, read_user_nodes
 from app.api.v1.users import read_user_profile
-from app.models.story import NodeStatus, NodeVisibility, StoryNode
+from app.models.story import NodeStatus, NodeVisibility, NodeZone, StoryNode
 from app.models.story_book import BookPhase, StoryBook
 from app.models.user import User, UserRole
 from app.schemas.story import NodeAuditRequest, StoryNodeCreate
@@ -27,6 +27,7 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
             is_active=True,
             hashed_password="",
         )
+        _now = datetime.now(timezone.utc)
         node = StoryNode(
             id=9,
             book_id=1,
@@ -37,6 +38,15 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
             word_count=15,
             status=NodeStatus.PENDING,
             visibility=NodeVisibility.PRIVATE,
+            zone=NodeZone.SHORT,
+            likes_count=0,
+            comments_count=0,
+            children_count=0,
+            is_ending=False,
+            freeze_interactions=False,
+            is_featured=False,
+            created_at=_now,
+            updated_at=_now,
         )
         node.author = author
 
@@ -240,14 +250,15 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
         db = AsyncMock()
         db.execute = AsyncMock(
             side_effect=[
-                ExecuteResult(scalar=10),
-                ExecuteResult(scalar=7),
-                ExecuteResult(scalar=20),
-                ExecuteResult(scalar=3),
-                ExecuteResult(scalar=14),
-                ExecuteResult(scalar=3),
-                ExecuteResult(scalar=8),
-                ExecuteResult(scalar=2),
+                ExecuteResult(scalar=10),  # users_total
+                ExecuteResult(scalar=1),   # users_banned (新增)
+                ExecuteResult(scalar=7),   # users_active（已排除封禁）
+                ExecuteResult(scalar=20),  # nodes_total
+                ExecuteResult(scalar=3),   # nodes_pending
+                ExecuteResult(scalar=14),  # nodes_published
+                ExecuteResult(scalar=3),   # nodes_archived
+                ExecuteResult(scalar=8),   # new_nodes_7d
+                ExecuteResult(scalar=2),   # new_users_7d
             ]
         )
 
@@ -255,7 +266,9 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
 
         self.assertEqual(payload["users"]["total"], 10)
         self.assertEqual(payload["users"]["active"], 7)
-        self.assertEqual(payload["users"]["inactive"], 3)
+        self.assertEqual(payload["users"]["banned"], 1)
+        # inactive = total - active - banned = 10 - 7 - 1
+        self.assertEqual(payload["users"]["inactive"], 2)
         self.assertEqual(payload["users"]["new_7d"], 2)
         self.assertEqual(payload["nodes"]["total"], 20)
         self.assertEqual(payload["nodes"]["pending"], 3)

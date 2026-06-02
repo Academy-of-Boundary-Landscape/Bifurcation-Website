@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, update, func
+from sqlalchemy import select, desc, update, func, case
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
@@ -262,15 +262,13 @@ async def delete_comment(
         comment.deleted_by = current_user.id
         db.add(comment)
         
-        # 🔧 修复问题 6: 同步更新节点的 comments_count
-        node = await db.get(StoryNode, comment.node_id)
-        if node:
-            if node.comments_count is None:
-                node.comments_count = 0
-            if node.comments_count > 0:
-                node.comments_count -= 1
-            db.add(node)
-        
+        # 原子自减节点 comments_count 并防负（与软删一致）
+        await db.execute(
+            update(StoryNode)
+            .where(StoryNode.id == comment.node_id)
+            .values(comments_count=case((StoryNode.comments_count > 0, StoryNode.comments_count - 1), else_=0))
+        )
+
         await db.commit()
     except Exception as e:
         await db.rollback()

@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func, or_
+from sqlalchemy import select, desc, func, or_, and_
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
@@ -238,7 +238,17 @@ async def admin_dashboard_stats(
     seven_days_ago = now - timedelta(days=7)
 
     users_total = (await db.execute(select(func.count(User.id)))).scalar() or 0
-    users_active = (await db.execute(select(func.count(User.id)).where(User.is_active.is_(True)))).scalar() or 0
+    # 封禁：角色为 BANNED 或临时封禁未到期（banned_until 在未来）
+    # 注意 banned_until 为 NULL 时 `NULL > now` 结果是 NULL，必须显式排除，否则 ~banned_pred 也变 NULL
+    banned_pred = or_(
+        User.role == UserRole.BANNED,
+        and_(User.banned_until.isnot(None), User.banned_until > now),
+    )
+    users_banned = (await db.execute(select(func.count(User.id)).where(banned_pred))).scalar() or 0
+    # 活跃：启用且未被封禁（旧口径把封禁用户也算进活跃，导致虚高）
+    users_active = (
+        await db.execute(select(func.count(User.id)).where(User.is_active.is_(True), ~banned_pred))
+    ).scalar() or 0
 
     nodes_total = (await db.execute(select(func.count(StoryNode.id)))).scalar() or 0
     nodes_pending = (
@@ -262,7 +272,9 @@ async def admin_dashboard_stats(
         "users": {
             "total": users_total,
             "active": users_active,
-            "inactive": users_total - users_active,
+            "banned": users_banned,
+            # 真正停用（未封禁但 is_active=False）= 总数 - 活跃 - 封禁
+            "inactive": users_total - users_active - users_banned,
             "new_7d": new_users_7d,
         },
         "nodes": {

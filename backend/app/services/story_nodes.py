@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -85,9 +85,12 @@ async def create_story_node_record(
         if node_in.parent_id is None:
             new_node.root_id = new_node.id
         elif parent_node is not None:
-            if parent_node.children_count is None:
-                parent_node.children_count = 0
-            parent_node.children_count += 1
+            # 原子自增父节点 children_count（统计 status != ARCHIVED 的子节点）
+            await db.execute(
+                update(StoryNode)
+                .where(StoryNode.id == parent_node.id)
+                .values(children_count=StoryNode.children_count + 1)
+            )
 
         await db.commit()
         await db.refresh(new_node)
@@ -151,6 +154,21 @@ async def audit_story_node_record(
         node.archived_reason = audit_in.reject_reason or "管理员归档"
         notification_type = NotificationType.REJECTED
         notification_message = audit_in.reject_reason
+
+    # 维护父节点 children_count（仅统计 status != ARCHIVED 的子节点）
+    if node.parent_id is not None and old_status != audit_in.status:
+        if audit_in.status == NodeStatus.ARCHIVED and old_status != NodeStatus.ARCHIVED:
+            await db.execute(
+                update(StoryNode)
+                .where(StoryNode.id == node.parent_id)
+                .values(children_count=case((StoryNode.children_count > 0, StoryNode.children_count - 1), else_=0))
+            )
+        elif old_status == NodeStatus.ARCHIVED and audit_in.status != NodeStatus.ARCHIVED:
+            await db.execute(
+                update(StoryNode)
+                .where(StoryNode.id == node.parent_id)
+                .values(children_count=StoryNode.children_count + 1)
+            )
 
     if old_status != audit_in.status and notification_type:
         logger.info(

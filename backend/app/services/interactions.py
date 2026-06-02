@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,9 +27,6 @@ async def toggle_story_node_like(
     if node.freeze_interactions:
         raise HTTPException(status_code=400, detail="该节点已冻结互动")
 
-    if node.likes_count is None:
-        node.likes_count = 0
-
     stmt = select(NodeLike).where(
         NodeLike.user_id == current_user.id,
         NodeLike.node_id == node_id,
@@ -39,12 +36,21 @@ async def toggle_story_node_like(
 
     if existing_like:
         await db.delete(existing_like)
-        if node.likes_count > 0:
-            node.likes_count -= 1
+        # 原子自减并防负，避免并发 read-modify-write 丢更新
+        await db.execute(
+            update(StoryNode)
+            .where(StoryNode.id == node_id)
+            .values(likes_count=case((StoryNode.likes_count > 0, StoryNode.likes_count - 1), else_=0))
+        )
         action = "unliked"
     else:
         db.add(NodeLike(user_id=current_user.id, node_id=node_id))
-        node.likes_count += 1
+        # 原子自增
+        await db.execute(
+            update(StoryNode)
+            .where(StoryNode.id == node_id)
+            .values(likes_count=StoryNode.likes_count + 1)
+        )
         action = "liked"
         logger.info("点赞通知: node=%d sender=%d receiver=%d", node.id, current_user.id, node.author_id)
         await send_notification(
@@ -58,10 +64,13 @@ async def toggle_story_node_like(
         )
 
     await db.commit()
+    new_count = (
+        await db.execute(select(StoryNode.likes_count).where(StoryNode.id == node_id))
+    ).scalar() or 0
     return {
         "status": "success",
         "action": action,
-        "likes_count": node.likes_count,
+        "likes_count": new_count,
     }
 
 
@@ -87,9 +96,12 @@ async def create_story_comment(
     )
     db.add(comment)
 
-    if node.comments_count is None:
-        node.comments_count = 0
-    node.comments_count += 1
+    # 原子自增评论数
+    await db.execute(
+        update(StoryNode)
+        .where(StoryNode.id == node_id)
+        .values(comments_count=StoryNode.comments_count + 1)
+    )
 
     logger.info("评论通知: node=%d sender=%d receiver=%d", node.id, current_user.id, node.author_id)
     await send_notification(
