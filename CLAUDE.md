@@ -64,6 +64,31 @@ npm run build                # 构建（含 type-check）
 
 ---
 
+## 3.5 Git 工作流（合并 / 推送到 main 的标准流程）
+
+**默认在分支上工作，main 始终保持可部署。** `push` 到 `origin/main` 会触发自动部署（CI 见 `.github/workflows/ci.yml`，`on: push: branches: [main]`）。
+
+标准节奏（每次成规模改动）：
+
+1. **开分支**：从 main 切 `chore/...`、`fix/...`、`feat/...`（不在 main 上直接改）。
+2. **分阶段提交**：按逻辑拆分提交；每个提交前先过验证门槛：
+   - 前端：`cd frontend && npx vue-tsc --build --force && npm run build-only`
+   - 后端：`cd backend && venv/bin/python -m pytest -q`（venv 需有 pytest/pytest-asyncio）
+3. **审阅**：合并前派一个 reviewer 子代理审 `git diff main..HEAD`（让它自己跑两套件复核）；修掉 Critical/Important。
+4. **合并**：`git checkout main && git merge --ff-only <branch>`（优先 fast-forward，保持线性历史）。
+5. **推送**：`git push origin main`（此步触发部署）。
+6. **清理**：`git branch -d <branch>`。
+
+纪律：
+- **只有用户明确要求才 `commit` / `push`**；批准一次不等于后续都批准，每次合并/推送前确认。
+- **提交信息**：沿用历史风格（`type(scope): 摘要`，可带 gitmoji），正文说清"做了什么 + 为什么"，结尾固定 trailer：
+  `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
+- **PR 正文**结尾加：`🤖 Generated with [Claude Code](https://claude.com/claude-code)`。
+- 合并前确认 `git status` 干净、与 `origin/main` 关系清楚（`git log --oneline origin/main..HEAD`）；推送后确认 `## main...origin/main` 已同步。
+- 注意：当前 CI 只跑**前端** type-check + build，**不跑后端 pytest**——后端改动的运行时风险要靠本地 `pytest` + 审阅把关。
+
+---
+
 ## 4. 前端核心约定（务必遵守）
 
 ### 4.1 数据层分层（见 `docs/frontend/data-layer.md`）
