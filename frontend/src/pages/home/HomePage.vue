@@ -108,10 +108,10 @@ const {
 const today = new Date()
 const todayStamp = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`
 
-// Aggregate counts from cached queries (best-effort — undefined falls through to "—")
-const totalLatest = computed(() => latestFeed.value?.length ?? null)
-const totalFeatured = computed(() => featuredNodes.value?.length ?? null)
-const totalTrending = computed(() => trendingNodes.value?.length ?? null)
+// 真实总数来自后端 X-Total-Count（ListResult.total），不再用被 limit 截断的当前页长度
+const totalLatest = computed(() => latestFeed.value?.total ?? null)
+const totalFeatured = computed(() => featuredNodes.value?.total ?? null)
+const totalTrending = computed(() => trendingNodes.value?.total ?? null)
 
 function fmtCount(n: number | null) {
   if (n == null) return '—'
@@ -181,7 +181,7 @@ function toDiscoveryItem(
 }
 
 const featuredItems = computed(() =>
-  (featuredNodes.value ?? []).map((node) =>
+  (featuredNodes.value?.items ?? []).map((node) =>
     toDiscoveryItem(node, {
       badge: node.feature_rank ? `FX-${String(node.feature_rank).padStart(2, '0')}` : 'FX',
       badgeTone: 'strong',
@@ -197,7 +197,7 @@ const featuredItems = computed(() =>
 )
 
 const latestFeedItems = computed(() =>
-  (latestFeed.value ?? []).map((node) =>
+  (latestFeed.value?.items ?? []).map((node) =>
     toDiscoveryItem(node, {
       actionLabel: '调阅节点',
     }),
@@ -205,7 +205,7 @@ const latestFeedItems = computed(() =>
 )
 
 const trendingItems = computed(() =>
-  (trendingNodes.value ?? []).map((node) =>
+  (trendingNodes.value?.items ?? []).map((node) =>
     toDiscoveryItem(node, {
       badge: `T+${node.likes_count}`,
       badgeTone: 'strong',
@@ -221,7 +221,7 @@ const trendingItems = computed(() =>
 )
 
 const searchItems = computed(() =>
-  (searchResults.value ?? []).map((node) =>
+  (searchResults.value?.items ?? []).map((node) =>
     toDiscoveryItem(node, {
       badge: `BOOK-${node.book_id}`,
       hint: formatDate(node.published_at || node.created_at),
@@ -294,8 +294,7 @@ function goTo(path: string) {
             </button>
           </div>
 
-          <!-- 显示当前 hero 上能调阅到的样本数（不是站点真实总数）。
-               想要真实总数需要后端开 count 接口；当前是 query.length，受 limit 截断。 -->
+          <!-- 真实总数来自后端 X-Total-Count（ListResult.total），不再受 limit 截断 -->
           <dl class="hero__telemetry">
             <div class="hero__telem">
               <dt>SHOWN · 编辑标记</dt>
@@ -517,12 +516,12 @@ function goTo(path: string) {
       <div v-else-if="searchError" class="query__error">
         ERROR: {{ (searchError as Error).message }}
       </div>
-      <div v-else-if="!searchResults?.length" class="query__hint">
+      <div v-else-if="!searchResults?.items.length" class="query__hint">
         STATUS: <span>NO MATCH</span> · 未匹配到已发布节点
       </div>
       <div v-else>
         <p class="query__result-count">
-          MATCHED {{ searchResults.length }} ENTR{{ searchResults.length === 1 ? 'Y' : 'IES' }}
+          MATCHED {{ searchResults.total }} ENTR{{ searchResults.total === 1 ? 'Y' : 'IES' }}
         </p>
         <div class="query__results">
           <DiscoveryNodeCard

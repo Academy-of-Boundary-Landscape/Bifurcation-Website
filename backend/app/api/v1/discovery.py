@@ -1,11 +1,12 @@
 from typing import Any, List, Optional
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, asc, desc, or_
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
+from app.api.pagination import list_total, set_total_header
 from app.core.database import get_db
 from app.models.story import StoryNode, NodeStatus
 from app.schemas import story as node_schema
@@ -28,6 +29,7 @@ router = APIRouter()
     },
 )
 async def get_featured_nodes(
+    response: Response,
     limit: int = Query(6, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
@@ -38,11 +40,15 @@ async def get_featured_nodes(
     2. 未设置 `feature_rank` 的节点排后
     3. 同 rank 下按发布时间倒序
     """
-    stmt = (
+    base = (
         select(StoryNode)
-        .options(selectinload(StoryNode.author))
         .where(StoryNode.status == NodeStatus.PUBLISHED)
         .where(StoryNode.is_featured.is_(True))
+    )
+    await set_total_header(response, db, base)
+
+    stmt = (
+        base.options(selectinload(StoryNode.author))
         .order_by(
             StoryNode.feature_rank.is_(None),
             asc(StoryNode.feature_rank),
@@ -50,7 +56,6 @@ async def get_featured_nodes(
         )
         .limit(limit)
     )
-
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -70,6 +75,7 @@ async def get_featured_nodes(
     },
 )
 async def get_latest_feed(
+    response: Response,
     book_id: Optional[int] = Query(None, ge=1, description="[可选] 只看某个活动/书本的动态"),
     skip: int = Query(0, ge=0), # 🛡️ 修复：防止负数导致 500
     limit: int = Query(20, ge=1, le=100), # 🛡️ 修复：防止请求过多数据
@@ -78,19 +84,22 @@ async def get_latest_feed(
     """
     获取全站最新发布的节点。
     """
-    stmt = (
-        select(StoryNode)
-        .options(selectinload(StoryNode.author))
-        .where(StoryNode.status == NodeStatus.PUBLISHED)
-        .order_by(desc(StoryNode.created_at))
-    )
+    base = select(StoryNode).where(StoryNode.status == NodeStatus.PUBLISHED)
 
     # `if book_id is not None` 而不是 `if book_id:`——
     # 后者会让 book_id=0 被当作未传，静默返回全局 feed
     if book_id is not None:
-        stmt = stmt.where(StoryNode.book_id == book_id)
+        base = base.where(StoryNode.book_id == book_id)
 
-    result = await db.execute(stmt.offset(skip).limit(limit))
+    await set_total_header(response, db, base)
+
+    stmt = (
+        base.options(selectinload(StoryNode.author))
+        .order_by(desc(StoryNode.created_at))
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 
@@ -109,6 +118,7 @@ async def get_latest_feed(
     },
 )
 async def get_trending_nodes(
+    response: Response,
     days: int = Query(7, ge=1, le=30, description="统计最近几天的热度 (1-30天)"),
     limit: int = Query(10, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
@@ -120,31 +130,31 @@ async def get_trending_nodes(
     # 计算时间窗口 (使用 timezone-aware UTC)
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-    stmt = (
+    window_base = (
         select(StoryNode)
-        .options(selectinload(StoryNode.author))
         .where(StoryNode.status == NodeStatus.PUBLISHED)
         .where(StoryNode.created_at >= start_date)
-        .order_by(desc(StoryNode.likes_count))
-        .limit(limit)
     )
+    window_total = await list_total(db, window_base)
 
-    result = await db.execute(stmt)
-    nodes = result.scalars().all()
-    
-    # 🛡️ 兜底逻辑：如果近期太冷清，返回历史总榜
-    if len(nodes) < 3:
-        stmt_fallback = (
-            select(StoryNode)
-            .options(selectinload(StoryNode.author))
-            .where(StoryNode.status == NodeStatus.PUBLISHED)
+    # 🛡️ 兜底：近期太冷清（窗口内不足 3 条）则退回历史总榜，总数也用全站已发布数
+    if window_total < 3:
+        all_base = select(StoryNode).where(StoryNode.status == NodeStatus.PUBLISHED)
+        response.headers["X-Total-Count"] = str(await list_total(db, all_base))
+        stmt = (
+            all_base.options(selectinload(StoryNode.author))
             .order_by(desc(StoryNode.likes_count))
             .limit(limit)
         )
-        result = await db.execute(stmt_fallback)
-        return result.scalars().all()
-        
-    return nodes
+        return (await db.execute(stmt)).scalars().all()
+
+    response.headers["X-Total-Count"] = str(window_total)
+    stmt = (
+        window_base.options(selectinload(StoryNode.author))
+        .order_by(desc(StoryNode.likes_count))
+        .limit(limit)
+    )
+    return (await db.execute(stmt)).scalars().all()
 
 
 # ==========================================
@@ -162,6 +172,7 @@ async def get_trending_nodes(
     },
 )
 async def search_nodes(
+    response: Response,
     q: str = Query(..., min_length=1, max_length=50, description="搜索关键词"),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -170,9 +181,8 @@ async def search_nodes(
     简单的模糊搜索 (LIKE %q%)。
     """
     # 🛡️ 过滤特殊字符或空字符串逻辑已经在 Query(min_length=1) 中处理
-    stmt = (
+    base = (
         select(StoryNode)
-        .options(selectinload(StoryNode.author))
         .where(StoryNode.status == NodeStatus.PUBLISHED)
         .where(
             or_(
@@ -180,9 +190,13 @@ async def search_nodes(
                 StoryNode.content.ilike(f"%{q}%"),
             )
         )
-        .order_by(desc(StoryNode.likes_count)) # 搜索结果通常按热度排序
+    )
+    await set_total_header(response, db, base)
+
+    stmt = (
+        base.options(selectinload(StoryNode.author))
+        .order_by(desc(StoryNode.likes_count))  # 搜索结果通常按热度排序
         .limit(limit)
     )
-    
     result = await db.execute(stmt)
     return result.scalars().all()

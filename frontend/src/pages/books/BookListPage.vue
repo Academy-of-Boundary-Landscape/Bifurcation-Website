@@ -18,15 +18,16 @@ const phaseOptions = [
 const selectedPhase = ref('all')
 
 const filteredBooks = computed(() => {
-  if (!books.value) {
+  const items = books.value?.items
+  if (!items) {
     return []
   }
 
   if (selectedPhase.value === 'all') {
-    return books.value
+    return items
   }
 
-  return books.value.filter((book) => book.phase === selectedPhase.value)
+  return items.filter((book) => book.phase === selectedPhase.value)
 })
 
 function getPhaseLabel(phase?: string | null) {
@@ -68,7 +69,7 @@ function openBookDetail(bookId: number) {
         <div class="book-list-hero__metrics">
           <div class="ui-metric-card">
             <p class="ui-metric-card__label">Books</p>
-            <p class="ui-metric-card__value">{{ books?.length ?? 0 }}</p>
+            <p class="ui-metric-card__value">{{ books?.total ?? 0 }}</p>
           </div>
           <div class="ui-metric-card">
             <p class="ui-metric-card__label">Filter</p>

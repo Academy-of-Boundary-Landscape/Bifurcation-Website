@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 
 from app.api.v1.admin import admin_dashboard_stats, audit_node
 from app.api.v1.discovery import get_featured_nodes, get_latest_feed, get_trending_nodes, search_nodes
@@ -331,7 +331,7 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
         db = AsyncMock()
         db.execute = AsyncMock(return_value=ExecuteResult(all_items=[node]))
 
-        result = await get_latest_feed(book_id=None, skip=0, limit=20, db=db)
+        result = await get_latest_feed(response=Response(), book_id=None, skip=0, limit=20, db=db)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].id, node.id)
@@ -377,7 +377,7 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
         db = AsyncMock()
         db.execute = AsyncMock(return_value=ExecuteResult(all_items=[ranked_node, unranked_node]))
 
-        result = await get_featured_nodes(limit=6, db=db)
+        result = await get_featured_nodes(response=Response(), limit=6, db=db)
 
         self.assertEqual([node.id for node in result], [81, 82])
         self.assertTrue(all(node.is_featured for node in result))
@@ -406,18 +406,20 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
         node.author = author
 
         db = AsyncMock()
+        # 新流程：窗口计数(1) -> 因 <3 触发兜底 -> 全站计数(2) -> 取行(3)
         db.execute = AsyncMock(
             side_effect=[
-                ExecuteResult(all_items=[node]),
-                ExecuteResult(all_items=[node]),
+                ExecuteResult(scalar=1),            # 窗口内总数 < 3
+                ExecuteResult(scalar=5),            # 全站已发布总数
+                ExecuteResult(all_items=[node]),    # 兜底榜单行
             ]
         )
 
-        result = await get_trending_nodes(days=7, limit=10, db=db)
+        result = await get_trending_nodes(response=Response(), days=7, limit=10, db=db)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].likes_count, 99)
-        self.assertEqual(db.execute.await_count, 2)
+        self.assertEqual(db.execute.await_count, 3)
 
     async def test_search_nodes_returns_matching_published_nodes(self) -> None:
         author = User(
@@ -444,7 +446,7 @@ class TestStoryVisibilityAndAudit(BackendAsyncTestCase):
         db = AsyncMock()
         db.execute = AsyncMock(return_value=ExecuteResult(all_items=[node]))
 
-        result = await search_nodes(q="Quantum", limit=20, db=db)
+        result = await search_nodes(response=Response(), q="Quantum", limit=20, db=db)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "Quantum Branch")

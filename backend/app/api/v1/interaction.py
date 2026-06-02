@@ -1,12 +1,13 @@
 # app/api/v1/interaction.py
 from datetime import datetime, timezone
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, update, func, case
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
+from app.api.pagination import set_total_header
 from app.core.database import get_db
 from app.models.user import User, UserRole
 from app.models.story import StoryNode, NodeLike
@@ -118,15 +119,17 @@ async def create_node_comment(
     },
 )
 async def get_my_notifications(
+    response: Response,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
+    base = select(Notification).where(Notification.user_id == current_user.id)
+    await set_total_header(response, db, base)
+
     stmt = (
-        select(Notification)
-        .where(Notification.user_id == current_user.id)
-        .options(selectinload(Notification.sender))
+        base.options(selectinload(Notification.sender))
         .order_by(desc(Notification.created_at))
         .offset(skip)
         .limit(limit)

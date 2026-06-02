@@ -5,12 +5,13 @@ from datetime import datetime, timezone
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Response
 from sqlalchemy import desc, select, text, or_, update, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, defer, raiseload
 
 from app.api import deps
+from app.api.pagination import set_total_header
 from app.core.database import get_db
 from app.models.story import NodeLike, NodeStatus, NodeVisibility, StoryNode
 from app.models.story_book import StoryBook, BookPhase
@@ -164,19 +165,22 @@ async def update_book(
     },
 )
 async def read_books(
+    response: Response,
     phase: Optional[BookPhase] = Query(None, description="按阶段筛选，不传则返回全部（不含 archived）"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(StoryBook).order_by(desc(StoryBook.created_at)).offset(skip).limit(limit)
-
+    base = select(StoryBook)
     if phase is not None:
-        stmt = stmt.where(StoryBook.phase == phase)
+        base = base.where(StoryBook.phase == phase)
     else:
         # 默认不返回已归档的活动（归档活动走专门的展示入口）
-        stmt = stmt.where(StoryBook.phase != BookPhase.ARCHIVED)
+        base = base.where(StoryBook.phase != BookPhase.ARCHIVED)
 
+    await set_total_header(response, db, base)
+
+    stmt = base.order_by(desc(StoryBook.created_at)).offset(skip).limit(limit)
     result = await db.execute(stmt)
     return result.scalars().all()
 

@@ -39,7 +39,7 @@ const filterOptions: Array<{ value: NotificationFilter; label: string }> = [
   { value: 'rejected', label: '审核驳回' },
 ]
 
-const allNotifications = computed(() => notificationPages.value?.pages.flat() ?? [])
+const allNotifications = computed(() => notificationPages.value?.pages.flatMap((p) => p.items) ?? [])
 
 const filteredNotifications = computed(() => {
   if (filterType.value === 'all') return allNotifications.value
@@ -47,7 +47,8 @@ const filteredNotifications = computed(() => {
 })
 
 const unreadCountValue = computed(() => unreadCount.value?.unread_count ?? 0)
-const totalCount = computed(() => allNotifications.value.length)
+// 真实通知总数来自 X-Total-Count（首页返回的 total），不随无限滚动加载量变化
+const totalCount = computed(() => notificationPages.value?.pages[0]?.total ?? allNotifications.value.length)
 
 function setFilter(type: NotificationFilter) {
   filterType.value = type

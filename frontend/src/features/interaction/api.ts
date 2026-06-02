@@ -1,4 +1,4 @@
-import { get, post, put, patch, del } from '@/services/http'
+import { get, getList, post, put, patch, del } from '@/services/http'
 import type {
   Comment,
   CommentCreate,
@@ -34,7 +34,8 @@ export async function fetchNotifications(params?: { skip?: number; limit?: numbe
   if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString())
   if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
   const qs = queryParams.toString()
-  return get<Notification[]>(`/interaction/notifications${qs ? `?${qs}` : ''}`)
+  // 返回 { items, total }，total 为 X-Total-Count 真实通知总数
+  return getList<Notification>(`/interaction/notifications${qs ? `?${qs}` : ''}`)
 }
 
 export async function markAllNotificationsAsRead() {

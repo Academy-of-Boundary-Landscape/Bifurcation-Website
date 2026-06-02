@@ -133,6 +133,32 @@ class TestMetricsIntegrity(SQLiteIntegrationTestCase):
         self.assertEqual(me.json()["nodes_count"], 1)
         self.assertEqual(me.json()["nodes_count"], pub.json()["nodes_count"])
 
+    async def test_list_endpoints_expose_real_total_via_header(self) -> None:
+        # 建 5 个已发布节点，limit=2 仍应通过 X-Total-Count 暴露真实总数 5
+        with self.db_session() as s:
+            book = StoryBook(title="B", phase=BookPhase.WRITING, allow_new_nodes=True)
+            author = User(email="a@x.com", username="aaa", role=UserRole.WRITER, is_active=True)
+            s.add_all([book, author])
+            s.flush()
+            for i in range(5):
+                n = StoryNode(
+                    book_id=book.id, root_id=0, author_id=author.id, title=f"N{i}",
+                    content="quantum branch content", word_count=3,
+                    status=NodeStatus.PUBLISHED, visibility=NodeVisibility.PUBLIC,
+                )
+                s.add(n)
+                s.flush()
+                n.root_id = n.id
+            s.commit()
+
+        feed = await self.client.get("/api/v1/discovery/feed?limit=2")
+        self.assertEqual(feed.status_code, 200)
+        self.assertEqual(len(feed.json()), 2)
+        self.assertEqual(feed.headers.get("x-total-count"), "5")
+
+        search = await self.client.get("/api/v1/discovery/search?q=quantum&limit=2")
+        self.assertEqual(search.headers.get("x-total-count"), "5")
+
     async def test_admin_stats_excludes_banned_from_active(self) -> None:
         with self.db_session() as s:
             admin = User(email="adm@x.com", username="adm", role=UserRole.ADMIN, is_active=True)

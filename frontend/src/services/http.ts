@@ -46,6 +46,20 @@ export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<
   return response.data
 }
 
+// 列表查询：body 是裸数组，真实总数从 X-Total-Count 响应头读取（缺失则回退到当前页长度）
+export interface ListResult<T> {
+  items: T[]
+  total: number
+}
+
+export async function getList<T>(url: string, config?: AxiosRequestConfig): Promise<ListResult<T>> {
+  const response = await http.get<T[]>(url, config)
+  const items = response.data ?? []
+  const header = response.headers['x-total-count']
+  const total = header != null && header !== '' ? Number(header) : items.length
+  return { items, total: Number.isFinite(total) ? total : items.length }
+}
+
 // 通用 POST 请求
 export async function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
   const response = await http.post<T>(url, data, config)

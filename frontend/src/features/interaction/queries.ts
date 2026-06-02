@@ -96,7 +96,7 @@ export function useInfiniteNotificationsQuery() {
     queryFn: ({ pageParam }) => fetchNotifications({ skip: pageParam as number, limit: NOTIFICATIONS_PAGE_SIZE }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
-      if (lastPage.length < NOTIFICATIONS_PAGE_SIZE) return undefined
+      if (lastPage.items.length < NOTIFICATIONS_PAGE_SIZE) return undefined
       return allPages.length * NOTIFICATIONS_PAGE_SIZE
     },
   })

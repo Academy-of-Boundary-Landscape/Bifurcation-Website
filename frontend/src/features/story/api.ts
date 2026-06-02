@@ -1,4 +1,4 @@
-import { get, post, patch, del } from '@/services/http'
+import { get, getList, post, patch, del } from '@/services/http'
 import type {
   StoryBook,
   StoryBookCreate,
@@ -13,8 +13,9 @@ import type {
 export async function fetchBooks(params?: { phase?: string }) {
   const queryParams = new URLSearchParams()
   if (params?.phase) queryParams.append('phase', params.phase)
-  
-  return get<StoryBook[]>(`/story/books?${queryParams}`)
+
+  // 返回 { items, total }，total 为 X-Total-Count 真实活动总数
+  return getList<StoryBook>(`/story/books?${queryParams}`)
 }
 
 export async function fetchBook(bookId: number) {

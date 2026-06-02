@@ -14,7 +14,7 @@ import {
 } from 'naive-ui'
 import { useMessage } from 'naive-ui'
 
-import type { BookPhase, StoryBookCreate } from '@/types/models'
+import type { BookPhase, StoryBook, StoryBookCreate } from '@/types/models'
 import { useBooksQuery, useCreateBookMutation, useUpdateBookMutation } from '@/features/story/queries'
 
 const message = useMessage()
@@ -69,7 +69,7 @@ const createForm = ref<{
   showcase_end_at: null,
 })
 
-const sortedBooks = computed(() => [...(books.value ?? [])].sort((a, b) => b.id - a.id))
+const sortedBooks = computed(() => [...(books.value?.items ?? [])].sort((a, b) => b.id - a.id))
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '-'
@@ -133,7 +133,7 @@ function resetCreateForm() {
   }
 }
 
-function ensureEditState(book: NonNullable<typeof books.value>[number]) {
+function ensureEditState(book: StoryBook) {
   if (editState.value[book.id]) return editState.value[book.id]
   editState.value = {
     ...editState.value,
@@ -151,7 +151,7 @@ function ensureEditState(book: NonNullable<typeof books.value>[number]) {
   return editState.value[book.id]
 }
 
-function toggleEditBook(book: NonNullable<typeof books.value>[number]) {
+function toggleEditBook(book: StoryBook) {
   if (expandedBookId.value === book.id) {
     expandedBookId.value = null
     return
