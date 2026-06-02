@@ -6,6 +6,7 @@ import type { UploadOnChange } from 'naive-ui/es/upload/src/public-types'
 import { useAuthStore } from '@/stores/auth'
 import { useMessage } from 'naive-ui'
 import { useMyProfileQuery, useUpdateMyProfileMutation, useUploadUserAvatarMutation, useUserNodesQuery } from '@/features/user/queries'
+import { storyStatusLabel } from '@/utils/storyStatus'
 
 const message = useMessage()
 const authStore = useAuthStore()
@@ -329,7 +330,7 @@ function handleStartWriting() {
                   </p>
                   <div class="profile-node-card__meta">
                     <span>{{ node.created_at ? formatDateTime(node.created_at) : '-' }}</span>
-                    <span>{{ node.status }}</span>
+                    <span>{{ storyStatusLabel(node.status) }}</span>
                     <span>{{ node.likes_count || 0 }} 赞</span>
                     <span>{{ node.comments_count || 0 }} 评论</span>
                     <span>{{ node.children_count || 0 }} 分支</span>

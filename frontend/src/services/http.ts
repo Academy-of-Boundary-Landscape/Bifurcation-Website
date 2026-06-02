@@ -1,6 +1,5 @@
 import axios, { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { useMessage } from 'naive-ui'
 
 // 创建 axios 实例
 const http = axios.create({

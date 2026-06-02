@@ -8,6 +8,7 @@ import { useNodeDetailQuery, useNodeLineageQuery } from '@/features/story/querie
 import { useToggleLikeMutation } from '@/features/interaction/queries'
 import StoryCreateConfirmModal from '@/components/story/StoryCreateConfirmModal.vue'
 import { buildStoryWriteRoute } from '@/features/story/navigation'
+import { storyStatusLabel } from '@/utils/storyStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -100,7 +101,7 @@ function handleBackToTree() {
                   <span>{{ item.author?.username }}</span>
                   <span>{{ new Date(item.created_at).toLocaleDateString('zh-CN') }}</span>
                   <n-tag :type="item.status === 'published' ? 'success' : 'warning'">
-                    {{ item.status }}
+                    {{ storyStatusLabel(item.status) }}
                   </n-tag>
                 </div>
               </div>

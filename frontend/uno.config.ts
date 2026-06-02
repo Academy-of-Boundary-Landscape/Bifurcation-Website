@@ -50,7 +50,6 @@ export default defineConfig({
       card: '#1a1a1a',
       border: '#2a2a2a',
       muted: '#666666',
-      accent: '#8b5cf6', // 紫色强调色
     },
   },
 })

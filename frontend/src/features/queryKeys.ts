@@ -14,7 +14,6 @@ export const queryKeys = {
   nodeChildren: (nodeId: number) => ['node-children', nodeId] as const,
   nodeCommentsRoot: () => ['node-comments'] as const,
   nodeComments: (nodeId: number, params?: { skip?: number; limit?: number }) => ['node-comments', nodeId, params] as const,
-  pendingNodes: (params?: { skip?: number; limit?: number }) => ['pending-nodes', params] as const,
   pendingNodesRoot: () => ['pending-nodes'] as const,
   adminNodes: (params?: {
     skip?: number

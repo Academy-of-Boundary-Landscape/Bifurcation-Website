@@ -8,6 +8,8 @@ import { useAuditStoryNodeMutation } from '@/features/admin/queries'
 import { canCreateFromStoryNode, getStoryNodeCreationBlockedReason } from '@/features/story/creation'
 import { buildStoryWriteRoute } from '@/features/story/navigation'
 import StoryCreateConfirmModal from '@/components/story/StoryCreateConfirmModal.vue'
+import StoryBranchPath from '@/components/story/StoryBranchPath.vue'
+import { storyStatusLabel } from '@/utils/storyStatus'
 import {
   useDeleteStoryNodeMutation,
   useNodeChildrenQuery,
@@ -210,7 +212,7 @@ function handleAdminStatusUpdate() {
             </div>
           </div>
           <n-tag :type="node.status === 'published' ? 'success' : 'warning'">
-            {{ node.status }}
+            {{ node.is_ending ? storyStatusLabel('ending') : storyStatusLabel(node.status) }}
           </n-tag>
         </div>
 
@@ -254,7 +256,7 @@ function handleAdminStatusUpdate() {
               <div class="story-node-admin-toolbar__status">
                 <span class="story-node-admin-toolbar__label">当前状态</span>
                 <n-tag size="small" :type="node.status === 'published' ? 'success' : node.status === 'archived' ? 'error' : 'warning'">
-                  {{ node.status }}
+                  {{ storyStatusLabel(node.status) }}
                 </n-tag>
               </div>
             </div>
@@ -355,7 +357,7 @@ function handleAdminStatusUpdate() {
                 </p>
                 <div class="story-node-child__meta">
                   <span class="story-node-child__meta-item">{{ new Date(child.created_at).toLocaleDateString('zh-CN') }}</span>
-                  <span class="story-node-child__meta-item">{{ child.status }}</span>
+                  <span class="story-node-child__meta-item">{{ storyStatusLabel(child.status) }}</span>
                   <span class="story-node-child__meta-item">{{ child.likes_count }} 赞</span>
                   <span class="story-node-child__meta-item">{{ child.comments_count }} 评论</span>
                   <span class="story-node-child__meta-item">{{ child.children_count }} 分支</span>

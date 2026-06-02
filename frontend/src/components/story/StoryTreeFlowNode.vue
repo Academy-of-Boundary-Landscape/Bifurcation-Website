@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { storyStatusLabel } from '@/utils/storyStatus'
 
 const props = defineProps<{
   author: string
@@ -20,25 +21,9 @@ function handleClick() {
   emit('click')
 }
 
-const statusLabel = computed(() => {
-  if (props.isEnding) {
-    return '已完结'
-  }
-
-  if (props.status === 'published') {
-    return '已发布'
-  }
-
-  if (props.status === 'pending') {
-    return '待审核'
-  }
-
-  if (props.status === 'archived') {
-    return '已归档'
-  }
-
-  return props.status
-})
+const statusLabel = computed(() =>
+  props.isEnding ? storyStatusLabel('ending') : storyStatusLabel(props.status)
+)
 
 const authorLabel = computed(() => props.author.trim().slice(0, 16) || 'UNKNOWN')
 const likesLabel = computed(() => `${props.likesCount} likes`)

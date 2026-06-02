@@ -37,16 +37,6 @@ export async function updateAdminUser(
   return patch<User>(`/admin/users/${userId}`, payload)
 }
 
-export async function fetchPendingNodes(params?: { skip?: number; limit?: number }) {
-  const queryParams = new URLSearchParams()
-
-  if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString())
-  if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
-
-  const suffix = queryParams.toString()
-  return get<StoryNodeRead[]>(suffix ? `/admin/nodes/pending?${suffix}` : '/admin/nodes/pending')
-}
-
 export async function fetchAdminNodes(params?: {
   skip?: number
   limit?: number

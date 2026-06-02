@@ -22,23 +22,6 @@ export interface User {
   updated_at: string
 }
 
-export interface UserCreate {
-  email: string
-  username: string
-  password: string
-}
-
-export interface UserUpdate {
-  username?: string | null
-  bio?: string | null
-  avatar?: string | null
-}
-
-export interface UserProfileResponse extends User {
-  nodes_count?: number
-  likes_count?: number
-}
-
 // 故事册
 export interface StoryBook {
   id: number
@@ -164,22 +147,6 @@ export interface NodeAuditRequest {
   reject_reason?: string | null
 }
 
-// 前端扩展类型（用于页面展示）
-export interface StoryNodeWithBookTitle extends StoryNodeRead {
-  book_title: string | null
-}
-
-// 用户通知统计
-export interface UserNotificationsSummary {
-  unread_count: number
-  total_count: number
-}
-
-// 通知统计响应
-export interface NotificationCountResponse {
-  unread_count: number
-}
-
 // 管理员统计数据
 export interface AdminDashboardStats {
   users: {
@@ -197,84 +164,9 @@ export interface AdminDashboardStats {
   }
 }
 
-// 用户统计响应
-export interface UserStatsResponse {
-  nodes_count: number
-  likes_count: number
-  comments_count: number
-  branches_count: number
-}
-
-// 故事册节点统计
-export interface StoryBookNodeStats {
-  total_nodes: number
-  published_nodes: number
-  pending_nodes: number
-  archived_nodes: number
-}
-
-// 节点树统计
-export interface NodeTreeStats {
-  root_nodes_count: number
-  leaf_nodes_count: number
-  branch_nodes_count: number
-  max_depth: number
-}
-
-// 按照 cline.md 规范，所有 API 响应都应遵循统一格式
-export interface ApiResponse<T = unknown> {
-  data?: T
-  detail?: string
-  message?: string
-}
-
-export interface PaginatedResponse<T> {
-  items: T[]
-  total: number
-  page: number
-  size: number
-}
-
-// API 错误响应类型（在 api.ts 中定义，这里提供类型引用）
-// import { ApiErrorResponse } from '@/types/api'
-export type ApiErrorResponse = {
-  detail: string
-} | {
-  detail: Array<{ loc: (string | number)[]; msg: string; type: string }>
-}
-
-// 管理员节点统计
-export interface AdminNodeStatsResponse {
-  pending_count: number
-  published_count: number
-  archived_count: number
-}
-
 // 用户节点统计响应
 export interface UserNodeStatsResponse {
   published_nodes_count: number
   pending_nodes_count: number
   archived_nodes_count: number
-}
-
-// 故事册节点总数（用于 StoryBookDetailPage）
-export interface StoryBookNodesCountResponse {
-  nodes_count: number
-}
-
-// 节点路径类型（用于 StoryNodePage）
-export interface NodePathResponse extends StoryNodeRead {
-  depth: number
-}
-
-// 树状节点响应（用于 StoryBookDetailPage）
-export interface StoryTreeResponse extends StoryNodeTreeItem {}
-
-// 故事册统计响应
-export interface StoryBookStatsResponse {
-  total_books: number
-  active_books: number
-  pending_books: number
-  writing_books: number
-  showcase_books: number
 }

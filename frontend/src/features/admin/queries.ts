@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { NodeAuditRequest, NodeStatus, UserRole } from '@/types/models'
-import { auditPendingNode, fetchAdminNodes, fetchAdminStats, fetchAdminUsers, fetchPendingNodes, updateAdminUser } from './api'
+import { auditPendingNode, fetchAdminNodes, fetchAdminStats, fetchAdminUsers, updateAdminUser } from './api'
 import { queryKeys } from '@/features/queryKeys'
 
 export function useAdminStatsQuery() {
@@ -23,18 +23,6 @@ export function useAdminUsersQuery(
   return useQuery({
     queryKey: computed(() => queryKeys.adminUsers(toValue(params))),
     queryFn: () => fetchAdminUsers(toValue(params)),
-  })
-}
-
-export function usePendingNodesQuery(
-  params?: MaybeRefOrGetter<{
-    skip?: number
-    limit?: number
-  }>
-) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.pendingNodes(toValue(params))),
-    queryFn: () => fetchPendingNodes(toValue(params)),
   })
 }
 

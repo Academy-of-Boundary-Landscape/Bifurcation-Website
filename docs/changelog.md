@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-02
+
+- 前端代码清洗（来自 `docs/review/00-overview.md` 主题 A/F/G）：删除 20 个文件、净减约 3700 行，`npm run type-check` 与 `npm run build` 均通过。删除前对每个符号都用 `git grep` 二次验证零引用，并纠正了审阅的两处误报（`UserAvatar.vue` 实际在用已保留；不存在所谓"仓库根 frontend/ 未跟踪副本"）。
+- 删除已验证零引用的整组组件：`components/common/{ConfirmDialog,EmptyState,ErrorBlock,LoadingBlock,PageTitle,AppFooter}.vue`、整个 `components/editor/*`（5 个，含带 `alert()`/坏 `DraftGuard` 的死实现）、`components/story/StoryTreePanel.vue`。
+- 删除零引用的 store / util / composable：`stores/counter.ts`、`stores/ui.ts`、`utils/validation.ts`（整文件，写作页有自己的内联校验）、`composables/usePageTitle.ts`。
+- 局部删死：`utils/storage.ts` 移除未用的 `StorageManager` 类（保留在用的 `getStorage/setStorage/removeStorage`）；`services/http.ts` 移除未用的 `useMessage` import；`features/admin/*` 移除死 hook `usePendingNodesQuery` 与 `fetchPendingNodes`（页面用的是 `useAdminNodesQuery`）；`uno.config.ts` 移除违反黑白风格且零引用的 `accent: '#8b5cf6'`。
+- 清理 `types/*` 中 18 个零引用死类型，并顺带去掉 `ApiResponse`/`PaginatedResponse`/`ApiErrorResponse` 在 `api.ts` 与 `models.ts` 间无人消费的重复定义（消费方 `error-handler.ts` 指向 `api.ts` 版本，故 `models.ts` 副本为死代码）。
+- 清理仓库历史噪声（git 移除）：`frontend-temp/`、根目录 `cline.md`、`frontend/DEVELOPMENT_PROGRESS.md`（过期进度文档，且引用了已删除的 `cline.md`）。
+- 修复断裂的正文页面包屑：`StoryNodePage.vue` 模板早已使用 `<story-branch-path>` 却从未 import，导致面包屑静默渲染空白；现已正确引入 `StoryBranchPath`，并把该组件的紫色/硬编码色与无效点击逻辑收回到黑白终端 token 风格。
+- 统一节点状态枚举中文展示：新增单一来源 `utils/storyStatus.ts` 的 `storyStatusLabel()`，替换 `StoryTreeFlowNode` 的内联映射，并在此前仍渲染英文裸 `status` 的 Inspector、StoryNodePage、StoryLineagePage、StoryCreateConfirmModal、ProfilePage、AdminPendingNodesPage（去掉其重复的本地 `statusLabel`）统一复用。
+- 新增工程纪律文件 `CLAUDE.md`（编程纪律、数据层/视觉风格约定、superpowers 技能提醒）；新增前端审阅意见 `docs/review/`（6 分册 + 总览）。
+
 ## 2026-04-02
 
 - 彻底移除本地 `is_verified` 用户字段：后端用户模型、Schema、SSO 同步、初始化脚本、前端用户类型与测试契约都不再依赖“邮箱已验证”这条旧本地注册语义；在当前 Casdoor SSO 方案下，站内权限只取决于本站 token、`is_active` 和本地角色。

@@ -1,5 +1,4 @@
 import type { RouteLocationRaw } from 'vue-router'
-import type { StoryNode } from '@/types/models'
 
 export type DiscoveryRailStatus = 'published' | 'pending' | 'archived' | 'neutral'
 
@@ -38,16 +37,4 @@ export interface DiscoveryRailProps {
   emptyText?: string
   actionLabel?: string
   actionTo?: string
-}
-
-export interface DiscoveryNodeRecommendationSource {
-  nodes: StoryNode[]
-}
-
-export interface DiscoverySectionResponse<TItem = StoryNode> {
-  section_key: string
-  title: string
-  description?: string | null
-  algorithm_key?: string | null
-  items: TItem[]
 }

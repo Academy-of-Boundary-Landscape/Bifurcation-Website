@@ -5,6 +5,7 @@ import { ref } from 'vue'
 import type { StoryNodeTreeItem } from '@/types/models'
 import StoryCreateConfirmModal from '@/components/story/StoryCreateConfirmModal.vue'
 import { buildStoryWriteRoute } from '@/features/story/navigation'
+import { storyStatusLabel } from '@/utils/storyStatus'
 
 const router = useRouter()
 const showCreateModal = ref(false)
@@ -56,7 +57,7 @@ function confirmCreateNode() {
           </h2>
         </div>
         <span v-if="selectedNode" class="ui-chip">
-          {{ selectedNode.is_ending ? '已完结' : selectedNode.status }}
+          {{ selectedNode.is_ending ? storyStatusLabel('ending') : storyStatusLabel(selectedNode.status) }}
         </span>
       </div>
     </template>

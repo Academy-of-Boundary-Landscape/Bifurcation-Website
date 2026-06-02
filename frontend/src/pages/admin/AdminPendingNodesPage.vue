@@ -6,6 +6,7 @@ import { useMessage } from 'naive-ui'
 
 import { useAdminNodesQuery, useAuditStoryNodeMutation } from '@/features/admin/queries'
 import type { NodeStatus } from '@/types/models'
+import { storyStatusLabel } from '@/utils/storyStatus'
 
 const message = useMessage()
 const router = useRouter()
@@ -59,12 +60,6 @@ function formatDateTime(value: string | null | undefined) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(parsed)
-}
-
-function statusLabel(status: NodeStatus) {
-  if (status === 'published') return '已发布'
-  if (status === 'archived') return '已归档'
-  return '待审核'
 }
 
 function statusTagType(status: NodeStatus) {
@@ -241,7 +236,7 @@ function handleApply(nodeId: number, currentStatus: NodeStatus) {
               </div>
 
               <div class="audit-card__badges">
-                <n-tag size="small" :type="statusTagType(node.status)">{{ statusLabel(node.status) }}</n-tag>
+                <n-tag size="small" :type="statusTagType(node.status)">{{ storyStatusLabel(node.status) }}</n-tag>
                 <n-tag size="small" type="default">Book {{ node.book_id }}</n-tag>
                 <n-tag size="small" type="default">Node {{ node.id }}</n-tag>
                 <n-tag size="small" type="default">{{ node.word_count }} 字</n-tag>

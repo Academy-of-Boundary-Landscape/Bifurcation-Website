@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { NModal, NButton } from 'naive-ui'
 import type { AuthorInfo, NodeStatus } from '@/types/models'
+import { storyStatusLabel } from '@/utils/storyStatus'
 
 interface CreationContextNode {
   id: number
@@ -76,7 +77,7 @@ function handleConfirm() {
               <span v-if="createdDate"> · {{ createdDate }}</span>
             </p>
           </div>
-          <span class="ui-chip">{{ parentNode.status }}</span>
+          <span class="ui-chip">{{ storyStatusLabel(parentNode.status) }}</span>
         </div>
         <p class="story-create-confirm__summary">
           {{ nodeSummary }}
