@@ -265,6 +265,39 @@ sudo chown -R deploy:deploy /home/deploy/Bifurcation-Website
 
 > 这是为了让 CI 用 `${{ secrets.GITHUB_TOKEN }}` 把镜像推到 GHCR（GitHub Container Registry）。不开就推不上去。
 
+### 2.3.1 [可选/推荐] 阿里云 ACR：加速服务器拉镜像
+
+GHCR（`ghcr.io`）在国内服务器拉取常慢甚至卡死。把后端镜像额外推到阿里云容器镜像服务（ACR），服务器改从 ACR 拉，可大幅提速。**不配置则一切照旧走 GHCR。**
+
+**1. 阿里云控制台**：开通「容器镜像服务（个人版即免费）」→ 创建命名空间（记下 `<namespace>`）→ 创建镜像仓库 `bifurcation-backend`。记下仓库地址前缀，形如 `registry.cn-hangzhou.aliyuncs.com`，并设置 Registry 登录密码。
+
+**2. GitHub 仓库**：Settings → Secrets and variables → Actions：
+- **Variables** 标签页新增：`ACR_REGISTRY`（如 `registry.cn-hangzhou.aliyuncs.com`）、`ACR_NAMESPACE`（你的命名空间）。两者必须都填，缺一则 CI 退回只推 GHCR。
+- **Secrets** 标签页新增：`ACR_USERNAME`、`ACR_PASSWORD`（阿里云 Registry 账号密码）。
+
+配齐后，下次 push main：CI 会同时把镜像推到 GHCR 与 ACR（`<ACR_REGISTRY>/<ACR_NAMESPACE>/bifurcation-backend:latest` 及 `:<sha>`）。
+
+**3. 生产服务器**：
+```bash
+# 登录 ACR（拉私有库需要，一次即可）
+docker login <ACR_REGISTRY> -u <ACR_USERNAME> -p <ACR_PASSWORD>
+# 在项目根 .env 增加一行，让 compose 从 ACR 拉
+echo 'BACKEND_IMAGE=<ACR_REGISTRY>/<ACR_NAMESPACE>/bifurcation-backend:latest' >> .env
+```
+此后 `deploy/deploy.sh` 的 `docker compose pull backend` 会按 `BACKEND_IMAGE` 从 ACR 拉取，CI 与脚本都无需再改。
+
+### 2.3.2 [可选] Docker Hub 镜像加速器（让 postgres 拉取不卡死）
+
+postgres 镜像走 Docker Hub，国内拉取易抽风。给服务器 Docker 配阿里云镜像加速器：
+
+```bash
+# 阿里云控制台「容器镜像服务 → 镜像加速器」获取你的专属地址，填进 deploy/daemon.json 后：
+sudo cp deploy/daemon.json /etc/docker/daemon.json   # 或手动编辑 /etc/docker/daemon.json
+sudo systemctl restart docker
+```
+
+⚠️ 镜像加速器只对 **Docker Hub** 生效，对 `ghcr.io` 与私有 ACR **无效**——后端镜像的加速靠 2.3.1 的 ACR。
+
 ### 2.4 Casdoor：添加 Redirect URL
 
 **[浏览器]** Casdoor 管理面板 → **Applications** → 找到本应用（如 `bifurcation`）→ 编辑：
