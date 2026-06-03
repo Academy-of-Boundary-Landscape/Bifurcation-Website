@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { notifyRateLimited } from '@/services/notify'
 
 // 创建 axios 实例
 const http = axios.create({
@@ -35,6 +36,11 @@ http.interceptors.response.use(
     if (error.response?.status === 401) {
       const authStore = useAuthStore()
       authStore.logout()
+    }
+    // 429 限流 - 全局提示（不吞错误，调用方错误态照常触发）
+    if (error.response?.status === 429) {
+      const detail = (error.response.data as { detail?: string } | undefined)?.detail
+      notifyRateLimited(detail)
     }
     return Promise.reject(error)
   }
