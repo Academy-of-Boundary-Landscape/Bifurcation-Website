@@ -80,8 +80,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 需同时配齐 vars.ACR_REGISTRY + vars.ACR_NAMESPACE 与 secrets.ACR_USERNAME/ACR_PASSWORD；
+      # 任一缺失则整段 ACR 跳过，退回只推 GHCR（不破坏现有流水线）。
       - name: Log in to Aliyun ACR
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ACR_REGISTRY != ''
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ACR_REGISTRY != '' && vars.ACR_NAMESPACE != ''
         uses: docker/login-action@v3
         with:
           registry: ${{ vars.ACR_REGISTRY }}
@@ -100,7 +102,7 @@ jobs:
             echo "tags<<EOF"
             echo "ghcr.io/${OWNER_LC}/bifurcation-backend:latest"
             echo "ghcr.io/${OWNER_LC}/bifurcation-backend:${{ github.sha }}"
-            if [ -n "${{ vars.ACR_REGISTRY }}" ]; then
+            if [ -n "${{ vars.ACR_REGISTRY }}" ] && [ -n "${{ vars.ACR_NAMESPACE }}" ]; then
               echo "${{ vars.ACR_REGISTRY }}/${{ vars.ACR_NAMESPACE }}/bifurcation-backend:latest"
               echo "${{ vars.ACR_REGISTRY }}/${{ vars.ACR_NAMESPACE }}/bifurcation-backend:${{ github.sha }}"
             fi
