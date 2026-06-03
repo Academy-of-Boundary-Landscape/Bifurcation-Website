@@ -38,14 +38,15 @@ limiter = Limiter(key_func=user_or_ip_key, enabled=settings.RATE_LIMIT_ENABLED)
 
 
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    """统一 429 响应：body 用全站 {"detail": ...} 形状，并注入 Retry-After 等头。"""
-    response = JSONResponse(
+    """统一 429 响应：body 用全站 {"detail": ...} 形状，并注入 Retry-After 头。"""
+    # 从触发的限速规则中取窗口大小（秒），作为 Retry-After 值。
+    # exc.limit.limit 是 limits 库的 RateLimitItem，get_expiry() 返回窗口秒数。
+    try:
+        retry_after = str(exc.limit.limit.get_expiry())
+    except Exception:
+        retry_after = "60"
+    return JSONResponse(
         status_code=429,
         content={"detail": "操作过于频繁，请稍后再试"},
-    )
-    # 复用 slowapi 的头注入，拿到正确的 Retry-After / X-RateLimit-*。
-    # view_rate_limit 用 getattr 兜底：手动抛 RateLimitExceeded（如测试/自定义中间件）
-    # 未走 slowapi 检查流程时不会 500，_inject_headers 内部对 None 已有保护。
-    return request.app.state.limiter._inject_headers(
-        response, getattr(request.state, "view_rate_limit", None)
+        headers={"Retry-After": retry_after},
     )
