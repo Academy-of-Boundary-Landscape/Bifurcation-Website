@@ -80,9 +80,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Aliyun ACR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ACR_REGISTRY != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
       - name: Lowercase owner name
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Compute image tags
+        id: meta
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "ghcr.io/${OWNER_LC}/bifurcation-backend:latest"
+            echo "ghcr.io/${OWNER_LC}/bifurcation-backend:${{ github.sha }}"
+            if [ -n "${{ vars.ACR_REGISTRY }}" ]; then
+              echo "${{ vars.ACR_REGISTRY }}/${{ vars.ACR_NAMESPACE }}/bifurcation-backend:latest"
+              echo "${{ vars.ACR_REGISTRY }}/${{ vars.ACR_NAMESPACE }}/bifurcation-backend:${{ github.sha }}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -90,9 +113,7 @@ jobs:
         with:
           context: backend
           push: true
-          tags: |
-            ghcr.io/${{ env.OWNER_LC }}/bifurcation-backend:latest
-            ghcr.io/${{ env.OWNER_LC }}/bifurcation-backend:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
