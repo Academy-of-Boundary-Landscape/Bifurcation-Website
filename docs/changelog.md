@@ -4,7 +4,7 @@
 
 ### 限流（两层，来自 `docs/followups.md` §3.1）
 
-- **应用层（slowapi，按用户/IP，内存存储）**：新增 `backend/app/core/rate_limit.py`（limiter + key 函数 + 429 处理器 + 阈值常量）。点赞 `60/min`、评论 `6/min` 按登录用户限流（`get_current_user` 把 `user.id` 写进 `request.state`，供 key 函数读取）；SSO 换登录态 `10/min` 按真实客户端 IP（`X-Forwarded-For` 首跳）限流。429 返回统一 `{"detail": "操作过于频繁，请稍后再试"}` + `Retry-After` 头（直接从触发的限速窗口取秒数，绕开 slowapi 默认关闭的 header 注入）。
+- **应用层（slowapi，按用户/IP，内存存储）**：新增 `backend/app/core/rate_limit.py`（limiter + key 函数 + 429 处理器 + 阈值常量）。点赞 `60/min`、评论 `6/min` 按登录用户限流（`get_current_user` 把 `user.id` 写进 `request.state`，供 key 函数读取）；SSO 换登录态 `10/min` 按真实客户端 IP 限流（优先取 nginx 写入的可信 `X-Real-IP`，避免客户端伪造 `X-Forwarded-For` 首跳绕过）。429 返回统一 `{"detail": "操作过于频繁，请稍后再试"}` + `Retry-After` 头（直接从触发的限速窗口取秒数，绕开 slowapi 默认关闭的 header 注入）。
 - **网络层（nginx，仅写操作）**：`deploy/nginx.conf` 与 `nginx.example.conf` 加 `map $request_method` → 写方法（POST/PUT/PATCH/DELETE）按 IP 计数、读请求 key 为空跳过；`limit_req_zone … rate=20r/s` + `limit_req … burst=40 nodelay`，`limit_req_status 429`。属手动部署物，不在 CI。
 - **前端 429 提示**：抽出共享主题 `frontend/src/theme.ts`（App.vue 复用）；新增 `services/notify.ts` 用 `createDiscreteApi` 在拦截器（Vue setup 外）弹全局提示，3s 去重；`services/http.ts` 加 429 分支，复用 `ApiErrorResponse` 类型且不吞错误。
 - **测试**：`backend/tests/test_rate_limit.py`——key 函数单测 + 评论限流 429 集成测试（前 6 条 200、第 7 条 429、校验 body 与 `Retry-After: 60`）；`test_support.py` 默认 `limiter.enabled=False` 防止误伤既有用例并避免跨用例累积。

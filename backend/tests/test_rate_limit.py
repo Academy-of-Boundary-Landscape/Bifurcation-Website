@@ -30,12 +30,19 @@ def _req(*, headers=None, host="127.0.0.1", user_id=None):
 
 
 class TestRateLimitKeys(unittest.TestCase):
-    def test_client_ip_prefers_xff_first_hop(self):
+    def test_client_ip_prefers_trusted_real_ip_over_spoofable_xff(self):
+        # X-Real-IP 是 nginx 写的可信值；XFF 首跳可被客户端伪造，必须让 X-Real-IP 优先
+        req = _req(
+            headers={"X-Real-IP": "198.51.100.9", "X-Forwarded-For": "1.2.3.4, 10.0.0.1"},
+            host="127.0.0.1",
+        )
+        self.assertEqual(get_client_ip(req), "198.51.100.9")
+
+    def test_client_ip_uses_xff_first_hop_when_no_real_ip(self):
         req = _req(headers={"X-Forwarded-For": "203.0.113.7, 10.0.0.1"}, host="127.0.0.1")
         self.assertEqual(get_client_ip(req), "203.0.113.7")
 
-    def test_client_ip_falls_back_to_real_ip_then_client(self):
-        self.assertEqual(get_client_ip(_req(headers={"X-Real-IP": "198.51.100.9"})), "198.51.100.9")
+    def test_client_ip_falls_back_to_client_host(self):
         self.assertEqual(get_client_ip(_req(host="192.0.2.5")), "192.0.2.5")
 
     def test_user_key_prefers_user_then_ip(self):

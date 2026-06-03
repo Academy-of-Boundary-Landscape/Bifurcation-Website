@@ -15,13 +15,19 @@ SSO_LIMIT = "10/minute"       # 换登录态按 IP（未登录；装饰时须显
 
 
 def get_client_ip(request: Request) -> str:
-    """取真实客户端 IP。后端在 nginx 后面，必须读转发头，否则全是 127.0.0.1。"""
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
+    """取真实客户端 IP。后端在 nginx 后面，必须读转发头，否则全是 127.0.0.1。
+
+    安全：**优先用 X-Real-IP**——nginx 用 `proxy_set_header X-Real-IP $remote_addr`
+    写入可信的边缘地址；而 X-Forwarded-For 走 `$proxy_add_x_forwarded_for` 会把客户端
+    自带的 XFF 原样拼在最前，首跳可被伪造。仅当无 X-Real-IP 时才回退到 XFF 首跳，
+    最后回退到直连地址。否则攻击者可每次请求换一个伪造 IP，绕过按 IP 的限流。
+    """
     real = request.headers.get("x-real-ip")
     if real:
         return real.strip()
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
     client = request.client
     return client.host if client else "unknown"
 
