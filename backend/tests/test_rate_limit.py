@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,7 +10,12 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.core.rate_limit import get_client_ip, user_or_ip_key
+from app.core.rate_limit import COMMENT_LIMIT, get_client_ip, limiter, user_or_ip_key
+from app.core.security import create_access_token
+from app.models.story import NodeStatus, NodeVisibility, StoryNode
+from app.models.story_book import BookPhase, StoryBook
+from app.models.user import User, UserRole
+from tests.test_support import SQLiteIntegrationTestCase
 
 
 def _req(*, headers=None, host="127.0.0.1", user_id=None):
@@ -37,16 +43,6 @@ class TestRateLimitKeys(unittest.TestCase):
         self.assertEqual(user_or_ip_key(_req(host="192.0.2.5")), "192.0.2.5")
 
 
-from datetime import timedelta
-
-from app.core.security import create_access_token
-from app.core.rate_limit import limiter, COMMENT_LIMIT
-from app.models.story import NodeStatus, NodeVisibility, StoryNode
-from app.models.story_book import BookPhase, StoryBook
-from app.models.user import User, UserRole
-from tests.test_support import SQLiteIntegrationTestCase
-
-
 class TestCommentRateLimit(SQLiteIntegrationTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
@@ -63,8 +59,8 @@ class TestCommentRateLimit(SQLiteIntegrationTestCase):
         return {"Authorization": f"Bearer {token}"}
 
     async def test_comment_rate_limit_returns_429_after_threshold(self) -> None:
-        # COMMENT_LIMIT 是 "6/minute"；第 7 次应被挡
-        assert COMMENT_LIMIT == "6/minute"
+        # COMMENT_LIMIT 是 "6/minute"；第 7 次应被挡。阈值若变，需同步改下面的 range。
+        self.assertEqual(COMMENT_LIMIT, "6/minute", "阈值变了就要改循环次数与断言")
         with self.db_session() as s:
             book = StoryBook(title="B", phase=BookPhase.WRITING, allow_new_nodes=True)
             author = User(email="ra@x.com", username="rateauthor", role=UserRole.WRITER, is_active=True)
@@ -96,7 +92,8 @@ class TestCommentRateLimit(SQLiteIntegrationTestCase):
         last = await self.client.post(url, json={"content": "再来一条"}, headers=headers)
         self.assertEqual(last.status_code, 429)
         self.assertEqual(last.json()["detail"], "操作过于频繁，请稍后再试")
-        self.assertIn("retry-after", {k.lower() for k in last.headers.keys()})
+        retry_after = {k.lower(): v for k, v in last.headers.items()}.get("retry-after")
+        self.assertEqual(retry_after, "60")
 
 
 if __name__ == "__main__":
