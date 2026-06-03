@@ -93,6 +93,8 @@ jobs:
           tags: |
             ghcr.io/${{ env.OWNER_LC }}/bifurcation-backend:latest
             ghcr.io/${{ env.OWNER_LC }}/bifurcation-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ========================================
   # 前端：检查 + 构建 + 上传产物
