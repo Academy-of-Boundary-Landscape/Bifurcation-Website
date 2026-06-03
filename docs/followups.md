@@ -97,9 +97,11 @@
 
 ## 3. 安全护栏
 
-### 3.1 Rate limit（重要）
+### 3.1 Rate limit ✅ 已完成（2026-06-03）
 
-当前任何登录用户可以：
+两层限流已落地，详见 `changelog.md` 2026-06-03 与 `docs/superpowers/specs/2026-06-03-rate-limiting-design.md`。落地范围：slowapi 应用层（点赞 60/min、评论 6/min 按用户；SSO 换登录态 10/min 按 IP）+ nginx 网络层（写操作按 IP `20r/s burst40`，读请求放过）+ 前端 429 全局提示。**未做（按当时范围决策）**：建节点/上传限流、Redis 共享存储（当前单 worker 内存够用，多 worker/多实例时需换共享后端，否则各算各的）。
+
+原文保留为历史背景：当前任何登录用户可以——
 - 每秒几十次 `POST /interaction/node/{id}/like` 切换点赞 → 通知系统会被重复 dedupe 但 PG 仍然写入读取
 - 每秒几十次 `POST /interaction/node/{id}/comment` 灌评论
 
