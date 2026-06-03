@@ -1,6 +1,7 @@
 import axios, { AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { notifyRateLimited } from '@/services/notify'
+import type { ApiErrorResponse } from '@/types/api'
 
 // 创建 axios 实例
 const http = axios.create({
@@ -39,7 +40,9 @@ http.interceptors.response.use(
     }
     // 429 限流 - 全局提示（不吞错误，调用方错误态照常触发）
     if (error.response?.status === 429) {
-      const detail = (error.response.data as { detail?: string } | undefined)?.detail
+      const data = error.response.data as ApiErrorResponse | undefined
+      // 429 的 detail 是字符串；校验类错误的 detail 是数组，这里只取字符串，否则回退默认文案
+      const detail = typeof data?.detail === 'string' ? data.detail : undefined
       notifyRateLimited(detail)
     }
     return Promise.reject(error)
