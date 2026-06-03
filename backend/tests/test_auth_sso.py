@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, MagicMock, patch
 
 from fastapi import HTTPException
 
@@ -13,6 +13,13 @@ from app.services import sso
 from app.services.sso import _create_state_token
 
 from tests.test_support import BackendAsyncTestCase, ExecuteResult
+
+
+def _mock_request() -> MagicMock:
+    """返回一个最小可用的 Request mock，供直接调用带限流装饰器的端点函数使用。"""
+    req = MagicMock()
+    req.state = MagicMock()
+    return req
 
 
 class TestSSOExchange(BackendAsyncTestCase):
@@ -169,6 +176,7 @@ class TestSSOExchange(BackendAsyncTestCase):
             ),
         ):
             response = await exchange_sso_login(
+                _mock_request(),
                 SSOExchangeRequest(code="fake-code", state="fake-state"),
                 db=AsyncMock(),
             )

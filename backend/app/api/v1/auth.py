@@ -1,7 +1,7 @@
 # app/api/v1/auth.py
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from app.models.story import StoryNode, NodeLike, NodeStatus
 from app.schemas import user as user_schema
 from app.schemas import sso as sso_schema
 from app.services.sso import build_sso_login_url, exchange_sso_code
+from app.core.rate_limit import limiter, get_client_ip, SSO_LIMIT
 
 router = APIRouter()
 
@@ -33,7 +34,9 @@ async def get_sso_login_url(
     response_model=sso_schema.SSOExchangeResponse,
     summary="Casdoor 授权码换取本站登录态",
 )
+@limiter.limit(SSO_LIMIT, key_func=get_client_ip)
 async def exchange_sso_login(
+    request: Request,
     payload: sso_schema.SSOExchangeRequest,
     db: AsyncSession = Depends(get_db),
 ):

@@ -1,7 +1,7 @@
 # app/api/v1/interaction.py
 from datetime import datetime, timezone
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, update, func, case
 from sqlalchemy.orm import selectinload
@@ -16,6 +16,7 @@ from app.schemas import interaction as interact_schema
 from app.schemas import common as common_schema
 from app.schemas.story import MessageResponse
 from app.services.interactions import create_story_comment, toggle_story_node_like
+from app.core.rate_limit import limiter, LIKE_LIMIT, COMMENT_LIMIT
 
 router = APIRouter()
 
@@ -36,7 +37,9 @@ router = APIRouter()
         422: {"model": common_schema.ValidationErrorResponse, "description": "参数校验失败"},
     },
 )
+@limiter.limit(LIKE_LIMIT)
 async def toggle_node_like(
+    request: Request,
     node_id: int,
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -89,7 +92,9 @@ async def get_node_comments(
         422: {"model": common_schema.ValidationErrorResponse, "description": "参数校验失败"},
     },
 )
+@limiter.limit(COMMENT_LIMIT)
 async def create_node_comment(
+    request: Request,
     node_id: int,
     comment_in: interact_schema.CommentCreate,
     current_user: User = Depends(deps.get_current_active_user),

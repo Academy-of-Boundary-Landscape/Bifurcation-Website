@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, MagicMock, patch
 
 from fastapi import HTTPException
 
@@ -18,6 +18,13 @@ from app.models.user import User, UserRole
 from app.schemas.interaction import CommentCreate
 
 from tests.test_support import BackendAsyncTestCase, ExecuteResult
+
+
+def _mock_request() -> MagicMock:
+    """返回一个最小可用的 Request mock，供直接调用带限流装饰器的端点函数使用。"""
+    req = MagicMock()
+    req.state = MagicMock()
+    return req
 
 
 class TestInteractionFlows(BackendAsyncTestCase):
@@ -60,7 +67,7 @@ class TestInteractionFlows(BackendAsyncTestCase):
         db.commit = AsyncMock()
 
         with patch("app.services.interactions.send_notification", AsyncMock()) as notify_mock:
-            payload = await toggle_node_like(node_id=node.id, current_user=current_user, db=db)
+            payload = await toggle_node_like(request=_mock_request(), node_id=node.id, current_user=current_user, db=db)
 
         self.assertEqual(payload["action"], "liked")
         self.assertEqual(payload["likes_count"], 1)
@@ -121,6 +128,7 @@ class TestInteractionFlows(BackendAsyncTestCase):
 
         with patch("app.services.interactions.send_notification", AsyncMock()) as notify_mock:
             result = await create_node_comment(
+                request=_mock_request(),
                 node_id=node.id,
                 comment_in=CommentCreate(content="  Great branch  "),
                 current_user=current_user,
