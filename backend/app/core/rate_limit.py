@@ -11,7 +11,7 @@ from app.core.config import settings
 # —— 阈值 ——
 LIKE_LIMIT = "60/minute"      # 切赞按用户
 COMMENT_LIMIT = "6/minute"    # 发评论按用户（防灌水）
-SSO_LIMIT = "10/minute"       # 换登录态按 IP（未登录）
+SSO_LIMIT = "10/minute"       # 换登录态按 IP（未登录；装饰时须显式传 key_func=get_client_ip）
 
 
 def get_client_ip(request: Request) -> str:
@@ -43,7 +43,9 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
         status_code=429,
         content={"detail": "操作过于频繁，请稍后再试"},
     )
-    # 复用 slowapi 的头注入，拿到正确的 Retry-After / X-RateLimit-*
+    # 复用 slowapi 的头注入，拿到正确的 Retry-After / X-RateLimit-*。
+    # view_rate_limit 用 getattr 兜底：手动抛 RateLimitExceeded（如测试/自定义中间件）
+    # 未走 slowapi 检查流程时不会 500，_inject_headers 内部对 None 已有保护。
     return request.app.state.limiter._inject_headers(
-        response, request.state.view_rate_limit
+        response, getattr(request.state, "view_rate_limit", None)
     )
