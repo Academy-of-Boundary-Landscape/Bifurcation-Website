@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 本文件是 Claude Code 在本仓库工作时的纪律与核心约定。**优先级高于默认行为，低于用户的当场指令。**
 
 ---
@@ -16,7 +18,6 @@
 - **声称"做完 / 修好 / 通过"之前** → `superpowers:verification-before-completion`（先跑命令拿证据，再下结论）
 - **前端页面 / 组件设计** → `frontend-design`
 
-红旗思维（出现就停下来想想是不是在偷懒）："这只是个简单问题""先看看代码再说""这个不值得正式上技能"。
 
 ---
 
@@ -25,7 +26,7 @@
 "树状结构"小说续写平台。读者沿着故事树的分支阅读，并在任意节点续写新分支，经审核后并入世界线。
 
 - 前端：`/frontend` — Vue 3 + TypeScript + Vite + Pinia + Vue Router + TanStack Vue Query + Naive UI + UnoCSS
-- 后端：`/backend` — FastAPI + SQLAlchemy(async) + Alembic + Casdoor(SSO) + 本地 JWT 会话
+- 后端：`/backend` — FastAPI + SQLAlchemy 2.0(async) + Casdoor(SSO) + 本地 JWT 会话（schema 走启动时 `create_all`，**不是** alembic——见 §1.5）
 - 文档：`/docs` — **唯一**正式文档目录，以源码为准
 
 ### 目录里的历史噪声
@@ -33,15 +34,48 @@
 
 ---
 
+## 1.5 架构大图（Big Picture）
+
+跨多个文件才能看清、动手前要先建立的结构。
+
+### 故事树是核心数据模型（`backend/app/models/story.py`）
+`StoryNode` 自引用 `parent_id` 构成树，`root_id` 指向树根（建首节点时先 insert、再回填 `root_id = self.id`，见 `services/story_nodes.py`）。节点有三个**正交**状态维度：
+- `status`：`pending → published / archived`——读者续写的新分支要经管理员审核（`services/story_nodes.py:audit_*`）才进世界线。
+- `visibility`：`public / unlisted / private`（注意：`unlisted` 读路径尚未实现，见 `docs/followups.md`）。
+- `zone`：`long / short`。
+
+去规范化计数 `likes_count / comments_count / children_count` 用**原子 SQL** 维护（`x = x ± 1`，减法用 `case` 防负），漂移时用对账脚本 `backend/scripts/recount.py` 重算。树的读取在 `api/v1/story.py` 的 `build_memory_tree`：一次查出可见节点、在内存里建树，并把"父节点被过滤掉但自身仍可见"的节点提升为局部 root，避免子树整片消失。
+
+### 请求生命周期（后端，薄路由 + 厚 service）
+`main.py`（仓库根，建 FastAPI app、挂 CORS / 限流 / 异常处理）→ `app/api/api.py`（聚合 v1 路由）→ `app/api/v1/*.py`（路由，按资源分 `auth/story/users/interaction/admin/discovery/upload`，保持薄）→ `app/services/*.py`（业务逻辑与事务）→ `app/models`（SQLAlchemy）。依赖注入集中在 `app/api/deps.py`（DB session、当前用户、管理员守卫）。列表端点返回**裸 `List` + `X-Total-Count` 响应头**给真实总数（辅助见 `app/api/pagination.py`，CORS 已 expose 该头）。
+
+### 认证：Casdoor 登录 + 本地 JWT 会话
+Casdoor 只做登录鉴别（OAuth2 授权码）。换码在 `services/sso.py:exchange_sso_code`（校验 id_token / userinfo，**首登自动建本地用户**），随后本站签发**本地 JWT** 作为会话凭证。此后所有请求只认本地 JWT（`core/security.py` + `deps.get_current_user`），与 Casdoor 无关。
+
+### Schema 与迁移（重要——没有 alembic 流程）
+`alembic/versions/` 是空的。schema 演进靠容器启动时 `scripts/auto_migrate.py` 跑 `Base.metadata.create_all`（**只增不毁**）。新增表/字段：重启容器即可；**改字段类型 / 加索引 / 删列**：`create_all` 不处理，要手写迁移。`init_database.py` 会 `drop_all`，**只用于全新库**，生产入口 `entrypoint.sh` 绝不调它。
+
+### 运行时拓扑
+生产用 docker-compose（`postgres` + `backend`），后端容器 `entrypoint.sh` 先 auto_migrate（重试 5 次）再起 `uvicorn main:app --workers ${UVICORN_WORKERS:-2}`。nginx 反代 `127.0.0.1:8057` 并 serve 前端 `dist/`，把真实 IP 写进 `X-Real-IP`。
+- ⚠️ **默认 2 个 worker**：进程内状态（如 slowapi 内存限流计数）会**各算各的**，按进程计数的机制在多 worker 下阈值实际翻倍；要全局一致需换共享存储（Redis）。
+- 开发用 SQLite（`APP_ENV=dev` → `dev.db`），生产用 Postgres（`DATABASE_URL`）。
+
+---
+
 ## 2. 环境与构建
 
-### 后端
+### 后端（在 `backend/venv` 里开发；venv 需装 `pytest` + `pytest-asyncio`）
 ```bash
 cd backend
-source venv/bin/activate     # 必须在 /backend/venv 虚拟环境里开发
-python main.py               # 启动服务
-pytest                       # 跑测试
+source venv/bin/activate                  # 或直接用 venv/bin/python 前缀
+python main.py                            # 启动服务（读 BACKEND_HOST/BACKEND_PORT，默认 0.0.0.0:8057）
+venv/bin/python -m pytest -q              # 跑全部测试
+venv/bin/python -m pytest tests/test_metrics_integrity.py -q                                 # 单个文件
+venv/bin/python -m pytest tests/test_rate_limit.py::TestCommentRateLimit -v                  # 单个类
+venv/bin/python -m pytest tests/test_rate_limit.py::TestRateLimitKeys::test_user_key_prefers_user_then_ip -v   # 单个用例
+venv/bin/python -m scripts.recount       # 计数对账（漂移时重算 likes/comments/children）
 ```
+测试两种基类（共享工具在 `tests/test_support.py`）：`SQLiteIntegrationTestCase`（真 aiosqlite 库 + httpx 打 ASGI app，端到端）、`BackendAsyncTestCase`（mock execute 结果，单元）。
 
 ### 前端
 ```bash
@@ -50,6 +84,8 @@ npm install                  # 依赖在 /frontend/node_modules
 npm run dev                  # 开发
 npm run type-check           # vue-tsc 类型检查（提交前必跑）
 npm run build                # 构建（含 type-check）
+# 提交门槛（与 §3.5 一致，最干净的一次过）：
+npx vue-tsc --build --force && npm run build-only
 ```
 
 ---
@@ -80,12 +116,11 @@ npm run build                # 构建（含 type-check）
 6. **清理**：`git branch -d <branch>`。
 
 纪律：
-- **只有用户明确要求才 `commit` / `push`**；批准一次不等于后续都批准，每次合并/推送前确认。
+- `commit`可以自主决策，但**只有用户明确要求才  `push`**；，每次合并/推送前确认。
 - **提交信息**：沿用历史风格（`type(scope): 摘要`，可带 gitmoji），正文说清"做了什么 + 为什么"，结尾固定 trailer：
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
-- **PR 正文**结尾加：`🤖 Generated with [Claude Code](https://claude.com/claude-code)`。
 - 合并前确认 `git status` 干净、与 `origin/main` 关系清楚（`git log --oneline origin/main..HEAD`）；推送后确认 `## main...origin/main` 已同步。
-- 注意：当前 CI 只跑**前端** type-check + build，**不跑后端 pytest**——后端改动的运行时风险要靠本地 `pytest` + 审阅把关。
+- 注意 CI 范围（`.github/workflows/ci.yml`）：后端只做 `py_compile` 导入检查 + 镜像构建/推送，前端做 type-check + build——**两边都不跑后端 pytest**。所以后端运行时风险要靠本地 `pytest` + 审阅把关；push main 还会触发 SSH 部署。
 
 ---
 
