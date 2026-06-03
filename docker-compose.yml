@@ -23,7 +23,7 @@ services:
         max-file: "3"
 
   backend:
-    image: ghcr.io/academy-of-boundary-landscape/bifurcation-backend:latest  # GHCR 要求全小写
+    image: ${BACKEND_IMAGE:-ghcr.io/academy-of-boundary-landscape/bifurcation-backend:latest}  # 默认 GHCR；ACR 就绪后在服务器 .env 设 BACKEND_IMAGE 覆盖
     container_name: bifurcation-backend
     restart: unless-stopped
     depends_on:
