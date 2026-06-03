@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, Mock, MagicMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi import HTTPException
 
@@ -17,14 +17,7 @@ from app.models.story import NodeStatus, NodeVisibility, StoryNode
 from app.models.user import User, UserRole
 from app.schemas.interaction import CommentCreate
 
-from tests.test_support import BackendAsyncTestCase, ExecuteResult
-
-
-def _mock_request() -> MagicMock:
-    """返回一个最小可用的 Request mock，供直接调用带限流装饰器的端点函数使用。"""
-    req = MagicMock()
-    req.state = MagicMock()
-    return req
+from tests.test_support import BackendAsyncTestCase, ExecuteResult, mock_request as _mock_request
 
 
 class TestInteractionFlows(BackendAsyncTestCase):

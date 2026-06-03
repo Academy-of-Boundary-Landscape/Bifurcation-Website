@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
+from unittest.mock import MagicMock
 
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine
@@ -19,6 +20,13 @@ if str(BACKEND_DIR) not in sys.path:
 # 也不在进程内跨用例累积内存计数。专用测试 test_rate_limit.py 会临时开启。
 from app.core.rate_limit import limiter as _limiter
 _limiter.enabled = False
+
+
+def mock_request() -> MagicMock:
+    """返回一个最小可用的 Request mock，供直接调用带限流装饰器的端点函数使用。"""
+    req = MagicMock()
+    req.state = MagicMock()
+    return req
 
 
 class BackendAsyncTestCase(unittest.IsolatedAsyncioTestCase):
