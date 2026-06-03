@@ -277,14 +277,14 @@ GHCR（`ghcr.io`）在国内服务器拉取常慢甚至卡死。把后端镜像�
 
 配齐后，下次 push main：CI 会同时把镜像推到 GHCR 与 ACR（`<ACR_REGISTRY>/<ACR_NAMESPACE>/bifurcation-backend:latest` 及 `:<sha>`）。
 
-**3. 生产服务器**：
+**3. 生产服务器**（先登录、再改 `.env`——顺序反了下次 `deploy.sh` 拉取会 auth 失败）：
 ```bash
-# 登录 ACR（拉私有库需要，一次即可）
-docker login <ACR_REGISTRY> -u <ACR_USERNAME> -p <ACR_PASSWORD>
-# 在项目根 .env 增加一行，让 compose 从 ACR 拉
+# 登录 ACR（拉私有库需要，一次即可）。用 --password-stdin 避免密码进 shell 历史
+echo '<ACR_PASSWORD>' | docker login <ACR_REGISTRY> -u <ACR_USERNAME> --password-stdin
+# 让 compose 从 ACR 拉：在项目根 .env 设 BACKEND_IMAGE（已存在则手动编辑替换，别重复追加）
 echo 'BACKEND_IMAGE=<ACR_REGISTRY>/<ACR_NAMESPACE>/bifurcation-backend:latest' >> .env
 ```
-此后 `deploy/deploy.sh` 的 `docker compose pull backend` 会按 `BACKEND_IMAGE` 从 ACR 拉取，CI 与脚本都无需再改。
+此后 `deploy/deploy.sh` 的 `docker compose pull backend` 会按 `BACKEND_IMAGE` 从 ACR 拉取，CI 与脚本都无需再改。需固定某次构建可改用 `:<sha>` 标签。
 
 ### 2.3.2 [可选] Docker Hub 镜像加速器（让 postgres 拉取不卡死）
 
@@ -292,8 +292,10 @@ postgres 镜像走 Docker Hub，国内拉取易抽风。给服务器 Docker 配�
 
 ```bash
 # 阿里云控制台「容器镜像服务 → 镜像加速器」获取你的专属地址，填进 deploy/daemon.json 后：
-sudo cp deploy/daemon.json /etc/docker/daemon.json   # 或手动编辑 /etc/docker/daemon.json
-sudo systemctl restart docker
+# ⚠️ 若 /etc/docker/daemon.json 已存在，手动把 registry-mirrors 字段合并进去，别直接 cp 覆盖
+#    （否则会丢掉已有的 storage-driver / log-driver 等配置）
+sudo cp deploy/daemon.json /etc/docker/daemon.json
+sudo systemctl restart docker   # 会短暂重启所有容器（restart: unless-stopped 会自动拉起），建议低谷操作
 ```
 
 ⚠️ 镜像加速器只对 **Docker Hub** 生效，对 `ghcr.io` 与私有 ACR **无效**——后端镜像的加速靠 2.3.1 的 ACR。
