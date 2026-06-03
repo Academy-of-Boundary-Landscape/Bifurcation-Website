@@ -1,7 +1,7 @@
 # app/api/deps.py
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt, JWTError
 from sqlalchemy import select
@@ -16,6 +16,7 @@ bearer_scheme = HTTPBearer(auto_error=True)
 bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -42,6 +43,8 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
+    # 供 slowapi key_func 按用户限流
+    request.state.rate_limit_user_id = user.id
     return user
 
 async def get_current_active_user(
