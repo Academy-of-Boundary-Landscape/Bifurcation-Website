@@ -15,6 +15,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+# 测试默认关闭限流：slowapi enabled=False 时直接短路，既不误伤既有用例，
+# 也不在进程内跨用例累积内存计数。专用测试 test_rate_limit.py 会临时开启。
+from app.core.rate_limit import limiter as _limiter
+_limiter.enabled = False
+
 
 class BackendAsyncTestCase(unittest.IsolatedAsyncioTestCase):
     pass
