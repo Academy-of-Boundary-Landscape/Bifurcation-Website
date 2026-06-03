@@ -1,73 +1,7 @@
 <script setup lang="ts">
 import { NConfigProvider, NGlobalStyle, NMessageProvider, NDialogProvider } from 'naive-ui'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
-
-const themeOverrides = {
-  common: {
-    primaryColor: '#f1f1f1',
-    primaryColorHover: '#ffffff',
-    primaryColorPressed: '#d8d8d8',
-    primaryColorSuppl: '#f1f1f1',
-    infoColor: '#d6dce1',
-    successColor: '#8dc9a8',
-    warningColor: '#d7c986',
-    errorColor: '#d28f8f',
-    bodyColor: '#060606',
-    cardColor: '#101010',
-    modalColor: '#101010',
-    popoverColor: '#101010',
-    tableColor: '#101010',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    borderColorHover: 'rgba(255, 255, 255, 0.18)',
-    textColorBase: '#f4f4f4',
-    textColor1: '#f4f4f4',
-    textColor2: '#c8c8c8',
-    textColor3: '#9f9f9f',
-    placeholderColor: '#676767',
-    borderRadius: '4px',
-    fontFamily: '"IBM Plex Sans", "Segoe UI", "PingFang SC", sans-serif',
-    fontFamilyMono: '"IBM Plex Mono", "SFMono-Regular", monospace',
-  },
-  Button: {
-    borderRadiusTiny: '2px',
-    borderRadiusSmall: '4px',
-    borderRadiusMedium: '4px',
-    borderRadiusLarge: '4px',
-    textColorPrimary: '#050505',
-    textColorHoverPrimary: '#050505',
-    textColorPressedPrimary: '#050505',
-    colorHoverPrimary: '#ffffff',
-    colorPressedPrimary: '#d7d7d7',
-    borderPrimary: '1px solid rgba(255, 255, 255, 0.16)',
-    borderHoverPrimary: '1px solid rgba(255, 255, 255, 0.28)',
-    borderPressedPrimary: '1px solid rgba(255, 255, 255, 0.3)',
-  },
-  Card: {
-    color: '#101010',
-    colorModal: '#101010',
-    borderRadius: '8px',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    titleTextColor: '#f4f4f4',
-    textColor: '#c8c8c8',
-  },
-  Input: {
-    color: '#0b0b0b',
-    colorFocus: '#0b0b0b',
-    colorDisabled: '#121212',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
-    borderHover: '1px solid rgba(255, 255, 255, 0.22)',
-    borderFocus: '1px solid rgba(255, 255, 255, 0.28)',
-    borderRadius: '4px',
-    textColor: '#f4f4f4',
-    placeholderColor: '#656565',
-  },
-  Layout: {
-    color: 'transparent',
-    siderColor: '#080808',
-    headerColor: '#080808',
-    footerColor: '#080808',
-  },
-}
+import { themeOverrides } from '@/theme'
 </script>
 
 <template>
