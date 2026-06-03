@@ -5,13 +5,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
+from app.core.rate_limit import limiter, rate_limit_handler
 from app.api.api import api_router
 from dotenv import load_dotenv
 
 load_dotenv()  # 加载环境变量
 
 app = FastAPI(title=settings.PROJECT_NAME)
+
+# ==========================================
+# 🚦 限流（slowapi，按用户/IP，内存存储）
+# ==========================================
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 # ==========================================
 # 🌐 CORS 跨域配置
