@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write   # Trivy SARIF 上传到 Security 页需要
     defaults:
       run:
         working-directory: backend
@@ -124,6 +125,24 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # 镜像 CVE 扫描（只报告）：扫刚推上去的 SHA 镜像基础层漏洞，永不 fail
+      - name: Scan image with Trivy
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ env.OWNER_LC }}/bifurcation-backend:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '0'        # 只报告，不让 job 失败
+          severity: HIGH,CRITICAL
+
+      - name: Upload Trivy results to Security tab
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
 
   # ========================================
   # 前端：检查 + 构建 + 上传产物
