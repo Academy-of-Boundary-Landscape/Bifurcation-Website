@@ -1,0 +1,62 @@
+name: Security Scan
+
+# 只报告不拦截：所有扫描步骤 continue-on-error，永不挡部署。
+# 依赖扫描触发：push/PR + 每周定时（依赖未变期间新披露的 CVE）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * 1'   # 每周一 03:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install pip-audit
+        run: pip install pip-audit --quiet
+
+      # 后端：审计 requirements.txt；markdown 结果写进 job summary
+      - name: Audit backend dependencies (pip-audit)
+        continue-on-error: true
+        run: |
+          echo "## Backend pip-audit" >> "$GITHUB_STEP_SUMMARY"
+          pip-audit --requirement backend/requirements.txt --format markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 前端：npm audit（high 及以上）
+      - name: Audit frontend dependencies (npm audit)
+        continue-on-error: true
+        working-directory: frontend
+        run: |
+          echo "## Frontend npm audit" >> "$GITHUB_STEP_SUMMARY"
+          npm audit --audit-level=high >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks 需要完整历史才能扫提交
+
+      # 只报告：发现密钥不 fail。日后升级为拦截：去掉 continue-on-error。
+      - name: Run gitleaks
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
