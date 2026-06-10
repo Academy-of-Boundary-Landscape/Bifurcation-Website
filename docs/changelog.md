@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-11
+
+### CI/CD 安全加固（设计见 `docs/superpowers/specs/2026-06-11-cicd-security-hardening-design.md`，计划见 `docs/superpowers/plans/2026-06-11-cicd-security-hardening.md`）
+
+- **新增安全扫描工作流 `security.yml`**：集成 pip-audit（Python 依赖漏洞）+ npm audit（JavaScript 依赖漏洞）+ gitleaks（代码仓库敏感信息），仅报告不拦截；扫描在 push/PR 时触发 + 每周定时执行，便于持续监控安全状态。
+- **`ci.yml` backend job 加固**：新增 Trivy 镜像扫描（容器镜像漏洞扫描），SARIF 格式上传到 GitHub Security 页面；新增 pip 缓存，加速重复构建。
+- **`ci.yml` deploy job 串行化控制**：加入并发锁（concurrency group），确保同时到达的部署按序执行，避免多个部署并行进行导致的资源争用或部署冲突。
+- **`deploy.sh` 回滚策略升级**：从假回滚（仅日志记录）改为真实回滚，失败时自动捕获旧镜像 ID 并恢复上一版本，随后执行二次健康检查确认回滚成功，提高生产稳定性。
+
 ## 2026-06-03
 
 ### 限流（两层，来自 `docs/followups.md` §3.1）
