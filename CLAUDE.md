@@ -120,7 +120,7 @@ npx vue-tsc --build --force && npm run build-only
 - **提交信息**：沿用历史风格（`type(scope): 摘要`，可带 gitmoji），正文说清"做了什么 + 为什么"，结尾固定 trailer：
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 - 合并前确认 `git status` 干净、与 `origin/main` 关系清楚（`git log --oneline origin/main..HEAD`）；推送后确认 `## main...origin/main` 已同步。
-- 注意 CI 范围（`.github/workflows/ci.yml`）：后端只做 `py_compile` 导入检查 + 镜像构建/推送，前端做 type-check + build——**两边都不跑后端 pytest**。所以后端运行时风险要靠本地 `pytest` + 审阅把关；push main 还会触发 SSH 部署。
+- 注意 CI 范围（`.github/workflows/ci.yml`）：后端做 `py_compile` + import 检查 + **`pytest -q`**（`APP_ENV=dev`，SQLite），通过后再构建/推送镜像；前端做 type-check + build。**两边都不跑 lint**（后端无 ruff、前端无 eslint），也没有依赖/镜像漏洞扫描——这类质量与安全门槛仍要靠本地与审阅把关。push main 会触发 SSH 部署。
 
 ---
 
