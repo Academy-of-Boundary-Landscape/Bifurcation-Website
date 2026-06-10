@@ -192,6 +192,10 @@ jobs:
     needs: [backend, frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # 两次 push 时让当前部署跑完、下一次排队，不取消在途部署（避免半截状态）
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
 
     steps:
       # 拿到前端构建产物
