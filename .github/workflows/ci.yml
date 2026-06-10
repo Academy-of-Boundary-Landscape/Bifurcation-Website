@@ -131,7 +131,7 @@ jobs:
       # 镜像 CVE 扫描（只报告）：扫刚推上去的 SHA 镜像基础层漏洞，永不 fail
       - name: Scan image with Trivy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ghcr.io/${{ env.OWNER_LC }}/bifurcation-backend:${{ github.sha }}
           format: sarif
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     # 两次 push 时让当前部署跑完、下一次排队，不取消在途部署（避免半截状态）
     concurrency:
-      group: production-deploy
+      group: ${{ github.repository }}-production-deploy
       cancel-in-progress: false
 
     steps:

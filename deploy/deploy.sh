@@ -27,7 +27,8 @@ rollback() {
         fail "Deploy failed and no previous image to roll back to (first deploy?). Check: docker compose logs backend"
     fi
     log "Rolling back to previous image ${PREV_IMAGE_ID:0:19}..."
-    docker tag "$PREV_IMAGE_ID" bifurcation-backend:rollback
+    docker tag "$PREV_IMAGE_ID" bifurcation-backend:rollback || \
+        fail "Cannot tag previous image ${PREV_IMAGE_ID:0:19} for rollback — may have been GC'd"
     BACKEND_IMAGE=bifurcation-backend:rollback docker compose up -d || \
         fail "Rollback failed to start previous image. Check: docker compose logs backend"
     if health_check; then
