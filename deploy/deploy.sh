@@ -20,10 +20,21 @@ HEALTH_RETRIES=20
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 fail() { echo "[$(date '+%H:%M:%S')] FATAL: $*" >&2; exit 1; }
 
+# 真回滚：用部署前抓住的旧镜像 ID 拉起上一版本，再做一次健康检查。
+# PREV_IMAGE_ID 在拉新镜像前由主流程捕获（见下方 [2/4] 之前）。
 rollback() {
-    log "Rolling back — restarting previous containers..."
-    docker compose up -d 2>/dev/null || true
-    fail "Deploy failed. Check: docker compose logs backend"
+    if [ -z "${PREV_IMAGE_ID:-}" ]; then
+        fail "Deploy failed and no previous image to roll back to (first deploy?). Check: docker compose logs backend"
+    fi
+    log "Rolling back to previous image ${PREV_IMAGE_ID:0:19}..."
+    docker tag "$PREV_IMAGE_ID" bifurcation-backend:rollback
+    BACKEND_IMAGE=bifurcation-backend:rollback docker compose up -d || \
+        fail "Rollback failed to start previous image. Check: docker compose logs backend"
+    if health_check; then
+        log "Rolled back to previous version successfully (service restored)."
+        fail "Deploy failed but previous version restored. Investigate the new image."
+    fi
+    fail "Deploy failed AND rollback health check failed — service may be down. Check: docker compose logs backend"
 }
 
 health_check() {
@@ -74,7 +85,10 @@ fi
 # ── 2. 拉取新镜像 ──
 # 只拉 backend：postgres 使用本地已有的镜像，避免 Docker Hub 抽风时卡死整个部署。
 # 如需升级 postgres，手动 `docker compose pull postgres && docker compose up -d postgres`。
-log "[2/4] Pulling latest backend image..."
+# 先抓住当前运行容器的镜像 ID：pull 会顶掉 latest tag，但旧镜像 ID 仍在本地，
+# 抓住引用即可在失败时回滚（真回滚依赖这一步）。
+PREV_IMAGE_ID=$(docker inspect --format='{{.Image}}' bifurcation-backend 2>/dev/null || echo "")
+log "[2/4] Pulling latest backend image (prev=${PREV_IMAGE_ID:0:19})..."
 docker compose pull backend || rollback
 
 # ── 3. 重启容器 ──
