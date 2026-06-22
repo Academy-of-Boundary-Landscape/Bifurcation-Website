@@ -62,7 +62,7 @@ function openBookDetail(bookId: number) {
           <p class="ui-shell-kicker">Archive Index</p>
           <h1 class="ui-shell-title book-list-hero__title">故事册列表</h1>
           <p class="ui-page-hero__lead">
-            这里不是普通卡片墙，而是整套叙事系统的档案入口。先选定一部作品，再进入它的故事树导航台，决定从哪条路径开始阅读或创作。
+            选择一部作品，进入它的故事树，从某个节点开始阅读或续写。
           </p>
         </div>
 
@@ -82,11 +82,7 @@ function openBookDetail(bookId: number) {
     <section class="ui-page-section ui-shell-panel">
       <div class="ui-page-section__header">
         <div>
-          <p class="ui-shell-kicker">Phase Filter</p>
-          <h2 class="ui-shell-title">筛选视图</h2>
-          <p class="ui-page-section__lead">
-            先按阶段缩小范围，再进入具体故事树。这里的筛选不追求复杂，只做最核心的浏览分流。
-          </p>
+          <h2 class="ui-shell-title">可进入的故事册</h2>
         </div>
       </div>
 
@@ -100,18 +96,6 @@ function openBookDetail(bookId: number) {
         >
           {{ option.label }}
         </n-button>
-      </div>
-    </section>
-
-    <section class="ui-page-section ui-shell-panel">
-      <div class="ui-page-section__header">
-        <div>
-          <p class="ui-shell-kicker">Story Archives</p>
-          <h2 class="ui-shell-title">可进入的故事册</h2>
-          <p class="ui-page-section__lead">
-            每张卡片都只保留必要信息：标题、阶段、描述与入口。真正的结构探索将在书页里的故事树工作区完成。
-          </p>
-        </div>
       </div>
 
       <div v-if="isLoading" class="book-list-state">
@@ -149,7 +133,6 @@ function openBookDetail(bookId: number) {
           </div>
 
           <div class="ui-archive-card__footer">
-            <span class="book-list-card__hint">进入后可查看整棵故事树、节点检视器与分支阅读入口。</span>
             <n-button type="primary" @click="openBookDetail(book.id)">
               打开故事树
             </n-button>
@@ -178,12 +161,6 @@ function openBookDetail(bookId: number) {
   display: flex;
   justify-content: center;
   padding: 56px 0;
-}
-
-.book-list-card__hint {
-  color: var(--text-faint);
-  font-size: 13px;
-  line-height: 1.75;
 }
 
 @media (min-width: 980px) {

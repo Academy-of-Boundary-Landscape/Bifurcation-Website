@@ -19,7 +19,7 @@ function openRailAction() {
       <div>
         <p class="ui-shell-kicker">{{ kicker }}</p>
         <h2 class="ui-shell-title">{{ title }}</h2>
-        <p class="ui-page-section__lead">
+        <p v-if="description" class="ui-page-section__lead">
           {{ description }}
         </p>
       </div>

@@ -30,7 +30,7 @@ export interface DiscoveryRailItem {
 export interface DiscoveryRailProps {
   kicker: string
   title: string
-  description: string
+  description?: string
   items?: DiscoveryRailItem[]
   loading?: boolean
   error?: Error | null

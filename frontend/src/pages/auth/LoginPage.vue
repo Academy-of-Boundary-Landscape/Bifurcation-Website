@@ -33,18 +33,6 @@ async function handleSsoLogin() {
 <template>
   <div class="auth-entry-page">
     <div class="auth-grid">
-      <section class="auth-copy">
-        <p class="eyebrow">Identity Gateway</p>
-        <h1>以统一身份进入分岔视界</h1>
-        <p class="lead">
-          登录、注册与密码找回都交给 Casdoor 处理。进入本站之后，日常权限校验仍然使用本站后端签发的本地会话。
-        </p>
-        <div class="copy-lines">
-          <span>SSO 域名</span>
-          <strong>auth.secret-sealing.club</strong>
-        </div>
-      </section>
-
       <n-card class="auth-panel" :bordered="false">
         <div class="panel-head">
           <h2>登录 / 注册</h2>
@@ -86,64 +74,17 @@ async function handleSsoLogin() {
 }
 
 .auth-grid {
-  width: min(1080px, 100%);
+  width: min(460px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  grid-template-columns: 1fr;
   gap: 24px;
 }
 
-.auth-copy,
 .auth-panel {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(8, 8, 8, 0.82);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(10px);
-}
-
-.auth-copy {
-  padding: 40px;
-  color: #f5f5f5;
-}
-
-.eyebrow {
-  margin: 0 0 18px;
-  font-size: 12px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.48);
-}
-
-.auth-copy h1 {
-  margin: 0;
-  font-size: clamp(36px, 6vw, 72px);
-  line-height: 1.05;
-  letter-spacing: 0.04em;
-}
-
-.lead {
-  max-width: 40rem;
-  margin: 24px 0 0;
-  color: rgba(255, 255, 255, 0.68);
-  line-height: 1.85;
-}
-
-.copy-lines {
-  display: inline-grid;
-  gap: 8px;
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.74);
-}
-
-.copy-lines span {
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.44);
-}
-
-.auth-panel {
   display: grid;
   gap: 24px;
   align-content: center;
@@ -183,11 +124,6 @@ async function handleSsoLogin() {
 }
 
 @media (max-width: 900px) {
-  .auth-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .auth-copy,
   .auth-panel {
     padding: 28px;
   }

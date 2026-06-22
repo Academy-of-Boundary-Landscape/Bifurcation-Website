@@ -277,8 +277,7 @@ function goTo(path: string) {
           <p class="hero__sub">Bifurcation / a tree-shaped narrative archive</p>
 
           <p class="hero__lead">
-            一座以树状结构生长的协同小说档案。每一段叙述都被记录为一个节点；每一处分歧都被允许同时存在。
-            读者既可以沿原路径推进，也可以在任何节点处建立新的分支。
+            沿着故事树阅读，在任意节点续写新的分支。
           </p>
 
           <div class="hero__actions">
@@ -297,85 +296,19 @@ function goTo(path: string) {
           <!-- 真实总数来自后端 X-Total-Count（ListResult.total），不再受 limit 截断 -->
           <dl class="hero__telemetry">
             <div class="hero__telem">
-              <dt>SHOWN · 编辑标记</dt>
+              <dt>编辑标记</dt>
               <dd>{{ fmtCount(totalFeatured) }}</dd>
             </div>
             <div class="hero__telem">
-              <dt>SHOWN · 近期入档</dt>
+              <dt>近期入档</dt>
               <dd>{{ fmtCount(totalLatest) }}</dd>
             </div>
             <div class="hero__telem">
-              <dt>SHOWN · 高度关注</dt>
+              <dt>高度关注</dt>
               <dd>{{ fmtCount(totalTrending) }}</dd>
             </div>
           </dl>
         </div>
-
-        <!-- Schematic dendrogram on the right — orthogonal lines, no glow -->
-        <figure class="hero__schematic" aria-hidden="true">
-          <figcaption class="hero__schematic-caption">FIG. 1 — TREE TOPOLOGY (SCHEMATIC)</figcaption>
-          <svg viewBox="0 0 400 460" preserveAspectRatio="xMidYMid meet" class="schematic">
-            <!-- horizontal & vertical hairlines for measurement feel -->
-            <g class="schematic__grid">
-              <line x1="40" y1="50" x2="40" y2="430" />
-              <line x1="40" y1="430" x2="380" y2="430" />
-            </g>
-
-            <!-- trunk -->
-            <line x1="220" y1="430" x2="220" y2="320" class="schematic__line schematic__line--trunk" />
-
-            <!-- level 1: trunk → 3 primary branches -->
-            <line x1="220" y1="320" x2="120" y2="320" class="schematic__line" />
-            <line x1="220" y1="320" x2="320" y2="320" class="schematic__line" />
-            <line x1="120" y1="320" x2="120" y2="230" class="schematic__line" />
-            <line x1="220" y1="320" x2="220" y2="230" class="schematic__line" />
-            <line x1="320" y1="320" x2="320" y2="230" class="schematic__line" />
-
-            <!-- level 2: each primary → 2 secondaries -->
-            <line x1="120" y1="230" x2="80" y2="230" class="schematic__line" />
-            <line x1="120" y1="230" x2="160" y2="230" class="schematic__line" />
-            <line x1="80" y1="230" x2="80" y2="150" class="schematic__line" />
-            <line x1="160" y1="230" x2="160" y2="150" class="schematic__line" />
-
-            <line x1="220" y1="230" x2="190" y2="230" class="schematic__line" />
-            <line x1="220" y1="230" x2="250" y2="230" class="schematic__line" />
-            <line x1="190" y1="230" x2="190" y2="150" class="schematic__line" />
-            <line x1="250" y1="230" x2="250" y2="150" class="schematic__line" />
-
-            <line x1="320" y1="230" x2="290" y2="230" class="schematic__line" />
-            <line x1="320" y1="230" x2="360" y2="230" class="schematic__line" />
-            <line x1="290" y1="230" x2="290" y2="150" class="schematic__line" />
-            <line x1="360" y1="230" x2="360" y2="150" class="schematic__line" />
-
-            <!-- terminal tick marks -->
-            <line x1="74" y1="150" x2="86" y2="150" class="schematic__tick" />
-            <line x1="154" y1="150" x2="166" y2="150" class="schematic__tick" />
-            <line x1="184" y1="150" x2="196" y2="150" class="schematic__tick" />
-            <line x1="244" y1="150" x2="256" y2="150" class="schematic__tick" />
-            <line x1="284" y1="150" x2="296" y2="150" class="schematic__tick" />
-            <line x1="354" y1="150" x2="366" y2="150" class="schematic__tick" />
-
-            <!-- node labels (mono) -->
-            <text x="220" y="445" class="schematic__label">root</text>
-            <text x="120" y="345" class="schematic__label schematic__label--small">1.0</text>
-            <text x="220" y="345" class="schematic__label schematic__label--small">2.0</text>
-            <text x="320" y="345" class="schematic__label schematic__label--small">3.0</text>
-            <text x="80" y="138" class="schematic__label schematic__label--small">1.1</text>
-            <text x="160" y="138" class="schematic__label schematic__label--small">1.2</text>
-            <text x="190" y="138" class="schematic__label schematic__label--small">2.1</text>
-            <text x="250" y="138" class="schematic__label schematic__label--small">2.2</text>
-            <text x="290" y="138" class="schematic__label schematic__label--small">3.1</text>
-            <text x="360" y="138" class="schematic__label schematic__label--small">3.2</text>
-
-            <!-- root marker -->
-            <circle cx="220" cy="430" r="2.5" class="schematic__node" />
-          </svg>
-        </figure>
-      </div>
-
-      <div class="hero__floor">
-        <span aria-hidden="true">↓</span>
-        <span>SCROLL TO CONTINUE / 向下滚动</span>
       </div>
     </section>
 
@@ -389,7 +322,6 @@ function goTo(path: string) {
     <DiscoveryRail
       kicker="§01 / Selection index"
       title="编辑标记节点"
-      description="由管理员从近期分岔中标记的少量节点。如果暂无路径偏好，建议从此进入。"
       :items="featuredItems"
       :loading="featuredLoading"
       :error="featuredError as Error | null"
@@ -408,7 +340,6 @@ function goTo(path: string) {
     <DiscoveryRail
       kicker="§02 / Recent entries"
       title="近期入档节点"
-      description="近期已发布的新节点，按入档时间倒序排列。每一条都可能成为新世界线的根。"
       :items="latestFeedItems"
       :loading="latestFeedLoading"
       :error="latestFeedError as Error | null"
@@ -417,74 +348,25 @@ function goTo(path: string) {
       action-to="/books"
     />
 
-    <!-- ============ §03 STRUCTURAL NOTES ============ -->
+    <!-- ============ §03 ATTENTION / TRENDING ============ -->
     <div class="section-divider">
       <span class="section-divider__num">§03</span>
-      <span class="section-divider__rule" />
-      <span class="section-divider__label">STRUCTURAL NOTES</span>
-    </div>
-
-    <section class="notes">
-      <div class="notes__head">
-        <h2 class="notes__title">关于本档案</h2>
-        <p class="notes__lede">
-          以下三条说明了档案的结构边界与协作机制。阅读不需要登记身份；写入需要。
-        </p>
-      </div>
-
-      <ol class="notes__list">
-        <li class="notes__item">
-          <span class="notes__num">3.1</span>
-          <div class="notes__body">
-            <h3 class="notes__head3">树状结构</h3>
-            <p class="notes__text">
-              一本书不是线性的章节序列，而是一棵节点树。每个节点是一个独立的叙述单元，可继续分裂为多条后续分支。
-            </p>
-          </div>
-        </li>
-
-        <li class="notes__item">
-          <span class="notes__num">3.2</span>
-          <div class="notes__body">
-            <h3 class="notes__head3">分支续写</h3>
-            <p class="notes__text">
-              观测者可以选择任意已发布节点，在该节点之后建立新的子节点。新节点会作为该路径的一条分支并入树。
-            </p>
-          </div>
-        </li>
-
-        <li class="notes__item">
-          <span class="notes__num">3.3</span>
-          <div class="notes__body">
-            <h3 class="notes__head3">入档审阅</h3>
-            <p class="notes__text">
-              新建分支须经管理员审阅后才会入档（status: PUB）。在此之前，节点状态为 PEND，仅作者本人可见。
-            </p>
-          </div>
-        </li>
-      </ol>
-    </section>
-
-    <!-- ============ §04 ATTENTION / TRENDING ============ -->
-    <div class="section-divider">
-      <span class="section-divider__num">§04</span>
       <span class="section-divider__rule" />
       <span class="section-divider__label">ATTENTION / 收到点赞最多</span>
     </div>
 
     <DiscoveryRail
-      kicker="§04 / Attention"
+      kicker="§03 / Attention"
       title="收到点赞最多的节点"
-      description="按点赞数排序：优先取近七日发布的；近期内容不足时退到全时榜。"
       :items="trendingItems"
       :loading="trendingLoading"
       :error="trendingError as Error | null"
       empty-text="尚无点赞记录。"
     />
 
-    <!-- ============ §05 QUERY ============ -->
+    <!-- ============ §04 QUERY ============ -->
     <div class="section-divider">
-      <span class="section-divider__num">§05</span>
+      <span class="section-divider__num">§04</span>
       <span class="section-divider__rule" />
       <span class="section-divider__label">QUERY / 标题与正文搜索</span>
     </div>
@@ -492,9 +374,6 @@ function goTo(path: string) {
     <section class="query">
       <div class="query__head">
         <h2 class="query__title">查询已发布节点</h2>
-        <p class="query__lede">
-          按关键词检索已入档的节点（标题与正文）。区分大小写不敏感；暂不支持作者名搜索。
-        </p>
       </div>
 
       <div class="query__field">
@@ -533,30 +412,6 @@ function goTo(path: string) {
       </div>
     </section>
 
-    <!-- ============ §06 ENTER ============ -->
-    <div class="section-divider">
-      <span class="section-divider__num">§06</span>
-      <span class="section-divider__rule" />
-      <span class="section-divider__label">ENTER</span>
-    </div>
-
-    <section class="finale">
-      <div class="finale__inner">
-        <h2 class="finale__title">进入档案</h2>
-        <p class="finale__lede">
-          所有节点的入口都在故事册列表。从此进入。
-        </p>
-        <div class="finale__actions">
-          <n-button class="finale__cta" size="large" @click="goTo('/books')">
-            打开故事册列表
-            <span class="finale__cta-arrow" aria-hidden="true">→</span>
-          </n-button>
-        </div>
-        <p class="finale__signoff">
-          — END OF FRONTPAGE / §00.01
-        </p>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -702,12 +557,6 @@ function goTo(path: string) {
   grid-template-columns: 1fr;
   gap: clamp(40px, 5vw, 80px);
   align-items: start;
-}
-
-@media (min-width: 940px) {
-  .hero__inner {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  }
 }
 
 .hero__copy {
@@ -878,95 +727,6 @@ function goTo(path: string) {
   font-feature-settings: "tnum" 1;
 }
 
-/* Schematic dendrogram — orthogonal, no glow, monochrome */
-.hero__schematic {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--line-faint);
-  background: var(--bg-shell);
-  opacity: 0;
-  animation: fade-in 0.8s ease 0.35s forwards;
-}
-
-.hero__schematic-caption {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.schematic {
-  width: 100%;
-  height: auto;
-  max-height: 460px;
-}
-
-.schematic__grid line {
-  stroke: var(--line-faint);
-  stroke-width: 1;
-}
-
-.schematic__line {
-  stroke: var(--text-secondary);
-  stroke-width: 1.2;
-  stroke-linecap: square;
-  fill: none;
-  stroke-dasharray: 200;
-  stroke-dashoffset: 200;
-  animation: draw 1.4s ease 0.4s forwards;
-}
-
-.schematic__line--trunk {
-  stroke: var(--text-primary);
-  stroke-width: 1.5;
-  animation-delay: 0.2s;
-}
-
-.schematic__tick {
-  stroke: var(--text-secondary);
-  stroke-width: 1.2;
-  stroke-linecap: square;
-  opacity: 0;
-  animation: fade-in 0.4s ease 1.5s forwards;
-}
-
-.schematic__node {
-  fill: var(--text-primary);
-}
-
-.schematic__label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  fill: var(--text-faint);
-  letter-spacing: 0.04em;
-  text-anchor: middle;
-  opacity: 0;
-  animation: fade-in 0.4s ease 1.7s forwards;
-}
-
-.schematic__label--small {
-  font-size: 9.5px;
-}
-
-/* Floor: scroll cue */
-.hero__floor {
-  margin-top: clamp(40px, 5vw, 64px);
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line-faint);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
 /* ─────────────────────────────────────────────
    Section dividers (used between sections)
    ───────────────────────────────────────────── */
@@ -999,94 +759,7 @@ function goTo(path: string) {
 }
 
 /* ─────────────────────────────────────────────
-   §03 STRUCTURAL NOTES
-   ───────────────────────────────────────────── */
-.notes {
-  padding: 0 clamp(24px, 6vw, 96px);
-  max-width: 1280px;
-  margin: 0 auto;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.notes__head {
-  max-width: 720px;
-  margin-bottom: 36px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--line-faint);
-}
-
-.notes__title {
-  margin: 0 0 12px;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: clamp(1.8rem, 3.4vw, 2.8rem);
-  line-height: 1.18;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
-.notes__lede {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 1rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
-}
-
-.notes__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  border-top: 1px solid var(--line-faint);
-}
-
-.notes__item {
-  display: grid;
-  grid-template-columns: minmax(64px, 96px) 1fr;
-  gap: clamp(16px, 3vw, 40px);
-  align-items: start;
-  padding: 28px 0;
-  border-bottom: 1px solid var(--line-faint);
-}
-
-.notes__num {
-  font-family: var(--font-mono);
-  font-size: 0.92rem;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
-  font-feature-settings: "tnum" 1;
-}
-
-.notes__body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 720px;
-}
-
-.notes__head3 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 1.2rem;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-}
-
-.notes__text {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 0.98rem;
-  line-height: 1.72;
-  color: var(--text-secondary);
-}
-
-/* ─────────────────────────────────────────────
-   §05 QUERY
+   §04 QUERY
    ───────────────────────────────────────────── */
 .query {
   padding: 0 clamp(24px, 6vw, 96px);
@@ -1111,14 +784,6 @@ function goTo(path: string) {
   line-height: 1.16;
   letter-spacing: -0.02em;
   color: var(--text-primary);
-}
-
-.query__lede {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
 }
 
 .query__field {
@@ -1188,98 +853,11 @@ function goTo(path: string) {
 }
 
 /* ─────────────────────────────────────────────
-   §06 FINALE
-   ───────────────────────────────────────────── */
-.finale {
-  padding: clamp(48px, 7vw, 96px) clamp(24px, 6vw, 96px);
-  max-width: 1280px;
-  margin: 0 auto;
-  width: 100%;
-  box-sizing: border-box;
-  border-top: 1px solid var(--line-faint);
-  border-bottom: 1px solid var(--line-faint);
-}
-
-.finale__inner {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  max-width: 720px;
-}
-
-.finale__title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
-.finale__lede {
-  margin: 0 0 12px;
-  font-family: var(--font-body);
-  font-size: 1rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
-}
-
-.finale__actions {
-  display: flex;
-}
-
-.finale__cta {
-  --n-color: transparent !important;
-  --n-color-hover: var(--bg-panel) !important;
-  --n-color-pressed: var(--bg-panel-alt) !important;
-  --n-text-color: var(--text-primary) !important;
-  --n-text-color-hover: var(--text-primary) !important;
-  --n-text-color-pressed: var(--text-primary) !important;
-  --n-border: 1px solid var(--text-primary) !important;
-  --n-border-hover: 1px solid var(--text-primary) !important;
-  font-family: var(--font-body) !important;
-  font-weight: 500 !important;
-  letter-spacing: 0.04em !important;
-  height: 52px !important;
-  padding: 0 28px !important;
-  border-radius: 2px !important;
-}
-
-.finale__cta-arrow {
-  display: inline-block;
-  margin-left: 8px;
-  transition: transform var(--transition-base);
-}
-
-.finale__cta:hover .finale__cta-arrow {
-  transform: translateX(3px);
-}
-
-.finale__signoff {
-  margin: 24px 0 0;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-/* ─────────────────────────────────────────────
    Animations
    ───────────────────────────────────────────── */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes draw {
-  to { stroke-dashoffset: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1288,20 +866,10 @@ function goTo(path: string) {
   .hero__sub,
   .hero__lead,
   .hero__actions,
-  .hero__telemetry,
-  .hero__schematic {
+  .hero__telemetry {
     opacity: 1;
     animation: none !important;
     transform: none !important;
-  }
-
-  .schematic__line,
-  .schematic__line--trunk,
-  .schematic__tick,
-  .schematic__label {
-    stroke-dashoffset: 0;
-    opacity: 1;
-    animation: none !important;
   }
 }
 </style>

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-23
+
+### 前端去"宣传海报"化（功能性审阅后的减负，A+B 两档）
+
+动因：首页等页面堆了过多"宣传海报式、意义不明"的介绍——每个 section 都被包成「英文 kicker + 大标题 + 一段解说/自夸 lead」，再叠几块纯装饰。从功能性角度审阅后，按"清赘肉 + 解说降噪"两档处理；**刻意的 dossier 话术（`§0x` / `OBS` / `调阅节点` / `观测者` 等，属 CLAUDE.md §4.2 既定风格）本次保留不动。**
+
+- **首页 `HomePage.vue`（重灾区，瘦约 450 行）**：删除右侧手绘示意树 SVG「FIG. 1 — TREE TOPOLOGY」（假数据、不可点的装饰插图）、§06 finale（与 hero 重复的 CTA + "END OF FRONTPAGE" signoff）、hero 底部"SCROLL TO CONTINUE"滚动提示；删除整段 §03「关于本档案」三条科普（树状结构/分支续写/入档审阅，纯 onboarding 文案占一个 section）；hero lead 由两句概念营销压成一句功能说明；三条 DiscoveryRail 的 `description` 解说一并去掉；telemetry 标签去掉费解的 `SHOWN ·` 前缀。section 编号顺延为 §01/§02/§03/§04，并清掉随之失效的 CSS（`.hero__schematic`/`.schematic*`/`.hero__floor`/`.notes*`/`.finale*`/`.query__lede`）与不再使用的 `fade-in`、`draw` keyframe。
+- **`DiscoveryRail.vue` + `types/discovery.ts`**：`description` 改为可选（`description?: string`），模板用 `v-if` 守卫，去掉解说后不再渲染空段落。
+- **`BookListPage.vue`**：hero 防御性导语「这里不是普通卡片墙…」压成一句功能说明；合并"筛选视图"与"可进入的故事册"两个各带 kicker+导语的 section 为一个（筛选按钮并入书册区），删掉两处 section 说明文案；删除每张卡片与"打开故事树"按钮重复的 hint。
+- **`LoginPage.vue`**：删除为单个 SSO 按钮配的半页营销左栏（标题/lead/SSO 域名说明），登录卡片改为单列居中；清理随之失效的 `.auth-copy`/`.eyebrow`/`.lead`/`.copy-lines` 样式。
+- 范围外（未做）：dossier 术语直白化（C 档）、`BookDetailPage` 的 Reading Guidance（属复杂控件的合理使用提示，保留）。
+- 验证：前端 `vue-tsc --build --force` + `npm run build-only` 均通过（exit 0）；全仓 grep 确认无残留的已删类名/文案引用。未做线上可视渲染（依赖后端数据），建议本地 `npm run dev` 眼检首页布局。
+
 ## 2026-06-11
 
 ### CI/CD 安全加固（设计见 `docs/superpowers/specs/2026-06-11-cicd-security-hardening-design.md`，计划见 `docs/superpowers/plans/2026-06-11-cicd-security-hardening.md`）
