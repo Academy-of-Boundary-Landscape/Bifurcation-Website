@@ -2,6 +2,10 @@
 
 ## 2026-06-23
 
+### 修复 CI/CD 红灯：Trivy action tag 缺 `v` 前缀
+
+`ci.yml` backend job 自 6-10「pin Trivy 版本」起每次 push 都在 **Set up job** 阶段 3 秒内失败：`aquasecurity/trivy-action@0.36.0` 解析不到——upstream 的 tag 全部带 `v` 前缀（`v0.36.0`…），无前缀的 `0.36.0` 不存在。GitHub 在 setup 阶段会解析 job 内**所有** action 引用（哪怕该步骤带 `if` 条件被跳过），故这一个坏 tag 直接拖垮整个 backend job，连带 `deploy`（`needs: [backend, frontend]`）一直被跳过——即此前数次 push（含前端减负那次）**实际从未部署**。修复：`@0.36.0` → `@v0.36.0`。审计了 ci.yml 其余 14 处 `uses:`，均为合法 tag，仅此一处。
+
 ### 前端去"宣传海报"化（功能性审阅后的减负，A+B 两档）
 
 动因：首页等页面堆了过多"宣传海报式、意义不明"的介绍——每个 section 都被包成「英文 kicker + 大标题 + 一段解说/自夸 lead」，再叠几块纯装饰。从功能性角度审阅后，按"清赘肉 + 解说降噪"两档处理；**刻意的 dossier 话术（`§0x` / `OBS` / `调阅节点` / `观测者` 等，属 CLAUDE.md §4.2 既定风格）本次保留不动。**

@@ -131,7 +131,7 @@ jobs:
       # 镜像 CVE 扫描（只报告）：扫刚推上去的 SHA 镜像基础层漏洞，永不 fail
       - name: Scan image with Trivy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ env.OWNER_LC }}/bifurcation-backend:${{ github.sha }}
           format: sarif
